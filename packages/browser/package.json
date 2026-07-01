@@ -11,6 +11,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@trpc/client": "^11.18.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },

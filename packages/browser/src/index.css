@@ -40,6 +40,10 @@ textarea {
   font: inherit;
 }
 
+button {
+  cursor: pointer;
+}
+
 .app-shell {
   min-height: 100vh;
   padding: 48px 20px;
@@ -78,4 +82,90 @@ h1 {
   margin: 0;
   font-size: 1.05rem;
   color: #475569;
+}
+
+.status-card {
+  margin-top: 32px;
+  padding: 24px;
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.95), #ffffff);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.status-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.status-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: #0f172a;
+}
+
+.status-header button {
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 14px;
+  background: #0f766e;
+  color: white;
+  font-weight: 700;
+}
+
+.status-loading,
+.status-success p,
+.status-error p {
+  margin: 0;
+}
+
+.status-success,
+.status-error {
+  display: grid;
+  gap: 14px;
+}
+
+.status-success p {
+  color: #166534;
+}
+
+.status-error p {
+  color: #b91c1c;
+}
+
+.status-error code {
+  display: block;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #fff1f2;
+  color: #9f1239;
+  overflow: auto;
+}
+
+.status-grid {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+
+.status-grid div {
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: #f8fafc;
+}
+
+.status-grid dt {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.status-grid dd {
+  margin: 6px 0 0;
+  color: #0f172a;
+  font-weight: 600;
 }
