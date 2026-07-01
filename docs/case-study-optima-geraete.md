@@ -48,12 +48,12 @@ Dein Backend soll echte Arbeit machen, nicht nur die API durchreichen:
 
 Base-URL & Token bekommst du separat. Auth: `Authorization: Bearer <token>`. Die API ist **read-only** du ziehst nur Daten; Änderungen (Status etc.) hältst du in deinem eigenen Backend.
 
-| Methode + Pfad | Liefert / bewirkt |
-| --- | --- |
-| `GET /devices?lifecycle=&deviceType=&search=` | Liste aller Geräte inkl. Kunden- & Installations-Kontext |
-| `GET /devices/:id` | Ein Gerät mit allen Details + Timeline-Zeitstempeln |
-| `GET /upcoming-orders` | Geräte mit Installation in den nächsten 14 Tagen, die noch nicht verschickt/verbaut sind *(Arbeitsvorrat, optional)* |
-| `GET /online-status` | `[{ mac, lastSeen, isOnline }]` roher Live-Status, den du selbst auswertest *(optional)* |
+| Methode + Pfad                                | Liefert / bewirkt                                                                                                    |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `GET /devices?lifecycle=&deviceType=&search=` | Liste aller Geräte inkl. Kunden- & Installations-Kontext                                                             |
+| `GET /devices/:id`                            | Ein Gerät mit allen Details + Timeline-Zeitstempeln                                                                  |
+| `GET /upcoming-orders`                        | Geräte mit Installation in den nächsten 14 Tagen, die noch nicht verschickt/verbaut sind _(Arbeitsvorrat, optional)_ |
+| `GET /online-status`                          | `[{ mac, lastSeen, isOnline }]` roher Live-Status, den du selbst auswertest _(optional)_                             |
 
 **Beispiel-Element aus `GET /devices`:**
 
