@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { prisma } from "../db.js";
+import { mergeDevice } from "../devices/merge.js";
 import { publicProcedure, router } from "../trpc.js";
 
 export const appRouter = router({
@@ -14,12 +16,30 @@ export const appRouter = router({
       hasApiToken: Boolean(process.env.OPTIMA_API_TOKEN),
     };
   }),
-  device: router({
+  devices: router({
+    list: publicProcedure.query(async () => {
+      const devices = await prisma.device.findMany({
+        include: {
+          overlay: true,
+        },
+        orderBy: {
+          customerName: "asc",
+        },
+      });
+
+      return devices.map((device) => mergeDevice(device, device.overlay));
+    }),
     byId: publicProcedure.input(z.object({ id: z.string().min(1) })).query(({ input }) => {
-      return {
-        id: input.id,
-        message: "Device detail procedure scaffolded",
-      };
+      return prisma.device
+        .findUniqueOrThrow({
+          where: {
+            id: input.id,
+          },
+          include: {
+            overlay: true,
+          },
+        })
+        .then((device) => mergeDevice(device, device.overlay));
     }),
   }),
 });

@@ -20,11 +20,25 @@ model Device {
   installedAt      DateTime?
   activatedAt      DateTime?
   lastSeenAt       DateTime?
-  customerName     String
-  customerEmail    String
-  customerState    String
+  customerName     String?
+  customerEmail    String?
+  customerState    String?
   installationType String?
   installationDate DateTime?
-  createdAt        DateTime @default(now())
+  lastSyncedAt     DateTime
+  overlay          DeviceOverlay?
+}
+
+model DeviceOverlay {
+  deviceId         String   @id
+  lifecycle        String?
+  serialNumber     String?
+  macAddress       String?
+  notes            String?
+  baseLifecycle    String?
+  baseSerialNumber String?
+  baseMacAddress   String?
+  baseNotes        String?
   updatedAt        DateTime @updatedAt
+  device           Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
 }
