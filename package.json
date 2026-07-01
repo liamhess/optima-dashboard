@@ -6,6 +6,8 @@
     "build": "pnpm -r build",
     "dev:browser": "pnpm --filter browser dev",
     "build:browser": "pnpm --filter browser build",
+    "dev:node": "pnpm --filter @optima/node dev",
+    "build:node": "pnpm --filter @optima/node build",
     "format": "pnpm -r format",
     "format:check": "pnpm -r format:check",
     "precommit": "pnpm format && pnpm build",
