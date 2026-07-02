@@ -7,11 +7,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table.tsx";
+import { cn } from "@/lib/utils.ts";
 
 type DataTableProps<TData> = {
   columns: ColumnDef<TData>[];
   data: TData[];
   emptyMessage?: string;
+  getRowClassName?: (row: TData) => string | undefined;
+  onRowClick?: (row: TData) => void;
 };
 
 export function DataTable<TData>(props: DataTableProps<TData>): React.JSX.Element {
@@ -46,7 +49,14 @@ export function DataTable<TData>(props: DataTableProps<TData>): React.JSX.Elemen
             table.getRowModel().rows.map((row) => (
               <TableRow
                 key={row.id}
-                className="border-border/80 transition-colors hover:bg-secondary/35"
+                className={cn(
+                  "border-border/80 transition-colors hover:bg-secondary/35",
+                  props.onRowClick ? "cursor-pointer" : undefined,
+                  props.getRowClassName?.(row.original),
+                )}
+                onClick={() => {
+                  props.onRowClick?.(row.original);
+                }}
               >
                 {row.getVisibleCells().map((cell) => (
                   <TableCell key={cell.id} className="px-4 py-3.5 align-middle">

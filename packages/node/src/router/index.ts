@@ -22,7 +22,9 @@ const deviceListFiltersSchema = deviceBaseFiltersSchema
 
 const deviceBaseFiltersInputSchema = deviceBaseFiltersSchema.optional();
 
-function toDeviceBaseFilters(input: { search?: string; deviceType?: string } | undefined): DeviceBaseFilters {
+function toDeviceBaseFilters(
+  input: { search?: string; deviceType?: string } | undefined,
+): DeviceBaseFilters {
   return {
     search: input?.search ?? "",
     deviceType: input?.deviceType ?? "",

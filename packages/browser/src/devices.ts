@@ -17,6 +17,8 @@ type DeviceConflicts = {
   hasAny: boolean;
 };
 
+export type DeviceConflictField = Exclude<keyof DeviceConflicts, "hasAny">;
+
 export type DeviceListItem = {
   id: string;
   deviceType: string;
@@ -60,17 +62,36 @@ function toDate(value: Date | string | null): Date | null {
   return value instanceof Date ? value : new Date(value);
 }
 
-function formatDate(value: Date | string | null): string {
+export function formatDateLabel(value: Date | string | null, fallback = "Not scheduled"): string {
   const parsedValue = toDate(value);
 
   if (!parsedValue) {
-    return "Not scheduled";
+    return fallback;
   }
 
   return new Intl.DateTimeFormat("de-AT", {
     day: "2-digit",
     month: "short",
     year: "numeric",
+  }).format(parsedValue);
+}
+
+export function formatDateTimeLabel(
+  value: Date | string | null,
+  fallback = "Nicht verfuegbar",
+): string {
+  const parsedValue = toDate(value);
+
+  if (!parsedValue) {
+    return fallback;
+  }
+
+  return new Intl.DateTimeFormat("de-AT", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   }).format(parsedValue);
 }
 
@@ -86,7 +107,7 @@ function formatRelativeDays(days: number): string {
   return `${days} days ago`;
 }
 
-function getOnlineStatus(device: DeviceListItem): {
+export function getDeviceOnlineStatus(device: DeviceListItem): {
   label: string;
   tone: DeviceTableRow["onlineTone"];
 } {
@@ -153,7 +174,7 @@ function getOnlineStatus(device: DeviceListItem): {
 
 export function toDeviceTableRows(devices: DeviceListItem[]): DeviceTableRow[] {
   return devices.map((device) => {
-    const onlineStatus = getOnlineStatus(device);
+    const onlineStatus = getDeviceOnlineStatus(device);
 
     return {
       id: device.id,
@@ -163,7 +184,7 @@ export function toDeviceTableRows(devices: DeviceListItem[]): DeviceTableRow[] {
       lifecycle: device.lifecycle,
       serialNumber: device.serialNumber,
       macAddress: device.macAddress,
-      installationDateLabel: formatDate(device.installation.date),
+      installationDateLabel: formatDateLabel(device.installation.date),
       onlineLabel: onlineStatus.label,
       onlineTone: onlineStatus.tone,
     };

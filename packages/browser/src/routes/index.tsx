@@ -1,5 +1,5 @@
 import { useDeferredValue, useState, type JSX } from "react";
-import { createRoute } from "@tanstack/react-router";
+import { createRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge.tsx";
@@ -13,22 +13,14 @@ import {
   SelectValue,
 } from "@/components/ui/select.tsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip.tsx";
+import { DeviceDetailSheet } from "@/components/device-detail-sheet.tsx";
 import { DataTable } from "@/components/data-table.tsx";
-import { toDeviceTableRows, type DeviceTableRow } from "@/devices.ts";
+import { toDeviceTableRows, type DeviceListItem, type DeviceTableRow } from "@/devices.ts";
+import { lifecycleOptions } from "@/lifecycles.ts";
 import { rootRoute } from "./__root.tsx";
 import { trpc } from "../trpc.ts";
 
 const allFilterValue = "all";
-const lifecycleOptions = [
-  "Bestellt",
-  "Verschickt",
-  "Verbaut",
-  "Aktiviert",
-  "Online",
-  "Online mit Problem",
-  "Offline",
-  "Storniert",
-] as const;
 const installationDueLabel = "Installation steht an";
 const installationDueHint = "Installationen, die diese oder die nächste Woche geplant sind.";
 
@@ -112,6 +104,8 @@ function toQueryFilterValue(value: string): string {
 }
 
 function IndexPage(): JSX.Element {
+  const navigate = useNavigate({ from: indexRoute.id });
+  const { deviceId } = indexRoute.useSearch();
   const [search, setSearch] = useState("");
   const [lifecycle, setLifecycle] = useState(allFilterValue);
   const [deviceType, setDeviceType] = useState(allFilterValue);
@@ -134,8 +128,13 @@ function IndexPage(): JSX.Element {
     }),
   );
   const deviceTypesQuery = useQuery(trpc.devices.deviceTypes.queryOptions());
+  const selectedDeviceQuery = useQuery({
+    ...trpc.devices.byId.queryOptions({ id: deviceId ?? "" }),
+    enabled: Boolean(deviceId),
+  });
   const deviceRows = devicesQuery.data ? toDeviceTableRows(devicesQuery.data) : [];
   const deviceTypeOptions = deviceTypesQuery.data ?? [];
+  const selectedDevice = selectedDeviceQuery.data as DeviceListItem | undefined;
 
   return (
     <main className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,#fafaf5_100%)]">
@@ -320,10 +319,47 @@ function IndexPage(): JSX.Element {
           ) : null}
 
           {!devicesQuery.isLoading && !devicesQuery.error ? (
-            <DataTable columns={deviceColumns} data={deviceRows} emptyMessage="No devices found." />
+            <DataTable
+              columns={deviceColumns}
+              data={deviceRows}
+              emptyMessage="No devices found."
+              getRowClassName={(row) =>
+                row.id === deviceId
+                  ? "bg-primary/[0.065] shadow-[inset_0_0_0_1px_rgba(22,166,55,0.18)]"
+                  : undefined
+              }
+              onRowClick={(row) => {
+                void navigate({
+                  search: (previous) => ({
+                    ...previous,
+                    deviceId: row.id,
+                  }),
+                  replace: false,
+                });
+              }}
+            />
           ) : null}
         </section>
       </section>
+
+      <DeviceDetailSheet
+        device={selectedDevice}
+        error={selectedDeviceQuery.error ?? null}
+        isLoading={selectedDeviceQuery.isLoading}
+        isOpen={Boolean(deviceId)}
+        onClose={() => {
+          void navigate({
+            search: (previous) => ({
+              ...previous,
+              deviceId: undefined,
+            }),
+            replace: false,
+          });
+        }}
+        onRetry={() => {
+          void selectedDeviceQuery.refetch();
+        }}
+      />
     </main>
   );
 }
@@ -331,5 +367,8 @@ function IndexPage(): JSX.Element {
 export const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
+  validateSearch: (search) => ({
+    deviceId: typeof search.deviceId === "string" ? search.deviceId : undefined,
+  }),
   component: IndexPage,
 });
