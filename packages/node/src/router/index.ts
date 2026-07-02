@@ -7,7 +7,11 @@ import {
   type DeviceBaseFilters,
 } from "../devices/filters.js";
 import { mergeDevice } from "../devices/merge.js";
-import type { EditableDeviceValues } from "../devices/types.js";
+import {
+  editableDeviceFields,
+  type EditableDeviceField,
+  type EditableDeviceValues,
+} from "../devices/types.js";
 import { publicProcedure, router } from "../trpc.js";
 
 const deviceBaseFiltersSchema = z.object({
@@ -70,6 +74,62 @@ function hasEffectiveLocalChanges(
     values.notes !== device.notes
   );
 }
+
+function buildPersistedLocalChanges(
+  device: {
+    lifecycle: string;
+    serialNumber: string | null;
+    macAddress: string | null;
+    notes: string | null;
+  },
+  values: EditableDeviceValues,
+): {
+  hasAnyLocalChanges: boolean;
+  persistedValues: PersistedLocalChanges;
+} {
+  const initialPersistedValues: PersistedLocalChanges = {
+    lifecycle: null,
+    serialNumber: null,
+    macAddress: null,
+    notes: null,
+    baseLifecycle: null,
+    baseSerialNumber: null,
+    baseMacAddress: null,
+    baseNotes: null,
+  };
+
+  const persistedValues = editableDeviceFields.reduce<typeof initialPersistedValues>(
+    (accumulator, { field, baseField }) => {
+      const hasLocalChange = values[field] !== device[field];
+
+      accumulator[field] = hasLocalChange ? values[field] : null;
+      accumulator[baseField] = hasLocalChange ? device[field] : null;
+
+      return accumulator;
+    },
+    initialPersistedValues,
+  );
+
+  const hasAnyLocalChanges = editableDeviceFields.some(
+    ({ field }) => persistedValues[field as EditableDeviceField] !== null,
+  );
+
+  return {
+    hasAnyLocalChanges,
+    persistedValues,
+  };
+}
+
+type PersistedLocalChanges = {
+  lifecycle: string | null;
+  serialNumber: string | null;
+  macAddress: string | null;
+  notes: string | null;
+  baseLifecycle: string | null;
+  baseSerialNumber: string | null;
+  baseMacAddress: string | null;
+  baseNotes: string | null;
+};
 
 export const appRouter = router({
   health: publicProcedure.query(() => {
@@ -154,8 +214,9 @@ export const appRouter = router({
         });
 
         const values = toEditableDeviceValues(input);
+        const { hasAnyLocalChanges, persistedValues } = buildPersistedLocalChanges(device, values);
 
-        if (!hasEffectiveLocalChanges(device, values)) {
+        if (!hasAnyLocalChanges || !hasEffectiveLocalChanges(device, values)) {
           await prisma.deviceOverlay.deleteMany({
             where: {
               deviceId: device.id,
@@ -171,24 +232,10 @@ export const appRouter = router({
           },
           create: {
             deviceId: device.id,
-            lifecycle: values.lifecycle,
-            serialNumber: values.serialNumber,
-            macAddress: values.macAddress,
-            notes: values.notes,
-            baseLifecycle: device.lifecycle,
-            baseSerialNumber: device.serialNumber,
-            baseMacAddress: device.macAddress,
-            baseNotes: device.notes,
+            ...persistedValues,
           },
           update: {
-            lifecycle: values.lifecycle,
-            serialNumber: values.serialNumber,
-            macAddress: values.macAddress,
-            notes: values.notes,
-            baseLifecycle: device.lifecycle,
-            baseSerialNumber: device.serialNumber,
-            baseMacAddress: device.macAddress,
-            baseNotes: device.notes,
+            ...persistedValues,
           },
         });
 

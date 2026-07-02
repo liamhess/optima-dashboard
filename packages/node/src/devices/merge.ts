@@ -1,5 +1,11 @@
 import type { Device, DeviceOverlay } from "@prisma/client";
-import type { DeviceRecord, EditableDeviceConflictState, EditableDeviceField } from "./types.js";
+import { editableDeviceFields } from "./types.js";
+import type {
+  DeviceRecord,
+  EditableDeviceConflictState,
+  EditableDeviceConflictValue,
+  EditableDeviceField,
+} from "./types.js";
 
 export type MergedDevice = DeviceRecord<Date | null> & {
   lastSyncedAt: Date;
@@ -9,25 +15,6 @@ export type MergedDevice = DeviceRecord<Date | null> & {
   conflicts: EditableDeviceConflictState;
 };
 
-const editableFields = [
-  {
-    field: "lifecycle",
-    baseField: "baseLifecycle",
-  },
-  {
-    field: "serialNumber",
-    baseField: "baseSerialNumber",
-  },
-  {
-    field: "macAddress",
-    baseField: "baseMacAddress",
-  },
-  {
-    field: "notes",
-    baseField: "baseNotes",
-  },
-] as const;
-
 function hasConflict(
   overlayValue: string | null,
   currentBaseline: string | null,
@@ -36,17 +23,45 @@ function hasConflict(
   return overlayValue !== null && currentBaseline !== previousBaseline;
 }
 
+function buildConflictValue(
+  overlayValue: string | null,
+  currentBaseline: string | null,
+  previousBaseline: string | null,
+): EditableDeviceConflictValue {
+  return {
+    isConflicted: hasConflict(overlayValue, currentBaseline, previousBaseline),
+    localValue: overlayValue,
+    upstreamValue: currentBaseline,
+  };
+}
+
 export function mergeDevice(device: Device, overlay: DeviceOverlay | null): MergedDevice {
-  const initialConflicts: Record<EditableDeviceField, boolean> = {
-    lifecycle: false,
-    serialNumber: false,
-    macAddress: false,
-    notes: false,
+  const initialConflicts: Record<EditableDeviceField, EditableDeviceConflictValue> = {
+    lifecycle: {
+      isConflicted: false,
+      localValue: null,
+      upstreamValue: device.lifecycle,
+    },
+    serialNumber: {
+      isConflicted: false,
+      localValue: null,
+      upstreamValue: device.serialNumber,
+    },
+    macAddress: {
+      isConflicted: false,
+      localValue: null,
+      upstreamValue: device.macAddress,
+    },
+    notes: {
+      isConflicted: false,
+      localValue: null,
+      upstreamValue: device.notes,
+    },
   };
 
-  const conflicts = editableFields.reduce<EditableDeviceConflictState>(
+  const conflicts = editableDeviceFields.reduce<EditableDeviceConflictState>(
     (accumulator, { field, baseField }) => {
-      accumulator[field] = hasConflict(
+      accumulator[field] = buildConflictValue(
         overlay?.[field] ?? null,
         device[field],
         overlay?.[baseField] ?? null,
@@ -59,7 +74,7 @@ export function mergeDevice(device: Device, overlay: DeviceOverlay | null): Merg
     },
   );
 
-  conflicts.hasAny = editableFields.some(({ field }) => conflicts[field]);
+  conflicts.hasAny = editableDeviceFields.some(({ field }) => conflicts[field].isConflicted);
 
   return {
     id: device.id,

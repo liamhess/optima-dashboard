@@ -32,6 +32,34 @@ export type DeviceRecord<TDate> = {
 
 export type EditableDeviceField = "lifecycle" | "serialNumber" | "macAddress" | "notes";
 
+export type EditableDeviceBaseField =
+  | "baseLifecycle"
+  | "baseSerialNumber"
+  | "baseMacAddress"
+  | "baseNotes";
+
+export const editableDeviceFields = [
+  {
+    field: "lifecycle",
+    baseField: "baseLifecycle",
+  },
+  {
+    field: "serialNumber",
+    baseField: "baseSerialNumber",
+  },
+  {
+    field: "macAddress",
+    baseField: "baseMacAddress",
+  },
+  {
+    field: "notes",
+    baseField: "baseNotes",
+  },
+] as const satisfies ReadonlyArray<{
+  field: EditableDeviceField;
+  baseField: EditableDeviceBaseField;
+}>;
+
 export type EditableDeviceValues = {
   lifecycle: string;
   serialNumber: string | null;
@@ -39,6 +67,15 @@ export type EditableDeviceValues = {
   notes: string | null;
 };
 
-export type EditableDeviceConflictState = Record<EditableDeviceField, boolean> & {
+export type EditableDeviceConflictValue = {
+  isConflicted: boolean;
+  localValue: string | null;
+  upstreamValue: string | null;
+};
+
+export type EditableDeviceConflictState = Record<
+  EditableDeviceField,
+  EditableDeviceConflictValue
+> & {
   hasAny: boolean;
 };

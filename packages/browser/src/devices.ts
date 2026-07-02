@@ -9,11 +9,17 @@ type DeviceInstallation = {
   date: Date | string | null;
 };
 
+export type DeviceConflictValue = {
+  isConflicted: boolean;
+  localValue: string | null;
+  upstreamValue: string | null;
+};
+
 type DeviceConflicts = {
-  lifecycle: boolean;
-  serialNumber: boolean;
-  macAddress: boolean;
-  notes: boolean;
+  lifecycle: DeviceConflictValue;
+  serialNumber: DeviceConflictValue;
+  macAddress: DeviceConflictValue;
+  notes: DeviceConflictValue;
   hasAny: boolean;
 };
 

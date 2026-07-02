@@ -33,6 +33,7 @@ import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Textarea } from "@/components/ui/textarea.tsx";
 import { cn } from "@/lib/utils.ts";
 import {
+  type DeviceConflictValue,
   formatDateLabel,
   formatDateTimeLabel,
   getDeviceOnlineStatus,
@@ -42,13 +43,6 @@ import {
 } from "@/devices.ts";
 import { lifecycleOptions } from "@/lifecycles.ts";
 import { trpc } from "@/trpc.ts";
-
-const editableFieldLabels: Record<DeviceConflictField, string> = {
-  lifecycle: "Lifecycle",
-  serialNumber: "Seriennummer",
-  macAddress: "MAC-Adresse",
-  notes: "Notiz",
-};
 
 const onlineIndicatorClassNameByTone: Record<DeviceTableRow["onlineTone"], string> = {
   neutral: "size-2.5 rounded-full bg-muted-foreground/35",
@@ -144,6 +138,100 @@ function DetailGrid(props: { values: DetailValueProps[] }): JSX.Element {
   );
 }
 
+function ConflictChoiceCard(props: {
+  description: string;
+  field: DeviceConflictField;
+  isActive: boolean;
+  onSelect: () => void;
+  title: string;
+  value: string | null;
+}): JSX.Element {
+  return (
+    <button
+      type="button"
+      onClick={props.onSelect}
+      className={cn(
+        "rounded-md border px-3 py-3 text-left transition-colors",
+        props.isActive
+          ? "border-primary bg-primary/10 shadow-[0_10px_24px_rgba(22,166,55,0.08)]"
+          : "border-border/80 bg-background hover:border-primary/35",
+      )}
+    >
+      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+        {props.title}
+      </p>
+      <p className="mt-1 text-xs text-muted-foreground">{props.description}</p>
+      <p
+        className={cn(
+          "mt-3 text-sm leading-6 text-foreground",
+          props.field === "notes" ? "whitespace-pre-wrap break-words" : null,
+          props.field === "lifecycle" ? "break-normal font-sans" : null,
+          props.field === "serialNumber" || props.field === "macAddress"
+            ? "break-all font-mono"
+            : null,
+        )}
+      >
+        {props.field === "serialNumber"
+          ? emptyValue(props.value, "Keine Seriennummer")
+          : props.field === "macAddress"
+            ? emptyValue(props.value, "Keine MAC-Adresse")
+            : props.field === "notes"
+              ? emptyValue(props.value, "Keine Notiz")
+              : emptyValue(props.value, "Kein Lifecycle")}
+      </p>
+    </button>
+  );
+}
+
+function ConflictResolver(props: {
+  conflict: DeviceConflictValue;
+  currentValue: string;
+  field: DeviceConflictField;
+  onSelectValue: (value: string) => void;
+}): JSX.Element | null {
+  if (!props.conflict.isConflicted) {
+    return null;
+  }
+
+  const localFormValue = props.conflict.localValue ?? "";
+  const latestHeizmaValue = props.conflict.upstreamValue ?? "";
+
+  return (
+    <div className="rounded-md border border-amber-300/90 bg-amber-50/55 px-3 py-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <StatusPill tone="warning">Konflikt erkannt</StatusPill>
+        <p className="text-sm text-amber-900">
+          Die Daten bei Heizma haben sich inzwischen geändert. Wähle, welche Version du behalten
+          möchtest.
+        </p>
+      </div>
+
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <ConflictChoiceCard
+          field={props.field}
+          title="Meine Version"
+          description="Deine lokale Änderung bleibt erhalten."
+          value={props.conflict.localValue}
+          isActive={props.currentValue === localFormValue}
+          onSelect={() => {
+            props.onSelectValue(localFormValue);
+          }}
+        />
+        <ConflictChoiceCard
+          field={props.field}
+          title="Aktueller Heizma-Stand"
+          description="Der neueste Stand aus der Heizma-API wird übernommen."
+          value={props.conflict.upstreamValue}
+          isActive={props.currentValue === latestHeizmaValue}
+          onSelect={() => {
+            props.onSelectValue(latestHeizmaValue);
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
 function TimelineRows(props: { items: Array<{ label: string; value: string }> }): JSX.Element {
   return (
     <div className="space-y-0">
@@ -210,9 +298,9 @@ function DeviceDetailContent(props: { device: DeviceListItem }): JSX.Element {
   const onlineStatus = getDeviceOnlineStatus(device);
   const queryClient = useQueryClient();
   const [saveError, setSaveError] = useState<string | null>(null);
-  const conflictFields = (Object.entries(device.conflicts) as Array<[string, boolean]>)
-    .filter(([key, value]) => key !== "hasAny" && value)
-    .map(([key]) => key as DeviceConflictField);
+  const [pendingConflictResolutions, setPendingConflictResolutions] = useState<
+    Partial<Record<DeviceConflictField, "local" | "upstream">>
+  >({});
 
   const form = useForm<DeviceDetailFormValues>({
     defaultValues: toFormValues(device),
@@ -221,6 +309,7 @@ function DeviceDetailContent(props: { device: DeviceListItem }): JSX.Element {
     trpc.devices.updateLocalChanges.mutationOptions({
       onSuccess: async (savedDevice): Promise<void> => {
         setSaveError(null);
+        setPendingConflictResolutions({});
         form.reset(toFormValues(savedDevice));
         queryClient.setQueryData(trpc.devices.byId.queryKey({ id: device.id }), savedDevice);
 
@@ -239,6 +328,7 @@ function DeviceDetailContent(props: { device: DeviceListItem }): JSX.Element {
   useEffect(() => {
     form.reset(toFormValues(device));
     setSaveError(null);
+    setPendingConflictResolutions({});
   }, [device, form]);
 
   async function onSubmit(values: DeviceDetailFormValues): Promise<void> {
@@ -260,6 +350,8 @@ function DeviceDetailContent(props: { device: DeviceListItem }): JSX.Element {
     { label: "Aktiviert", value: formatDateTimeLabel(device.activatedAt, "Noch nicht gesetzt") },
     { label: "Letztes Signal", value: formatDateTimeLabel(device.lastSeenAt, "Noch kein Signal") },
   ];
+  const hasPendingConflictResolutions = Object.keys(pendingConflictResolutions).length > 0;
+  const canSubmitChanges = form.formState.isDirty || hasPendingConflictResolutions;
 
   return (
     <Form {...form}>
@@ -311,12 +403,7 @@ function DeviceDetailContent(props: { device: DeviceListItem }): JSX.Element {
 
         <DetailSection title="Bearbeitung">
           <div className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm font-medium text-foreground">Lokale Änderungen</p>
-              {form.formState.isDirty ? (
-                <StatusPill tone="warning">Ungespeichert</StatusPill>
-              ) : null}
-            </div>
+            <p className="text-sm font-medium text-foreground">Lokale Änderungen</p>
 
             <div className="grid gap-3 sm:grid-cols-2">
               <FormField
@@ -339,9 +426,22 @@ function DeviceDetailContent(props: { device: DeviceListItem }): JSX.Element {
                         ))}
                       </SelectContent>
                     </Select>
-                    {device.conflicts.lifecycle ? (
-                      <StatusPill tone="warning">Upstream-Konflikt</StatusPill>
-                    ) : null}
+                    <ConflictResolver
+                      field="lifecycle"
+                      conflict={device.conflicts.lifecycle}
+                      currentValue={field.value}
+                      onSelectValue={(value) => {
+                        setSaveError(null);
+                        setPendingConflictResolutions((current) => ({
+                          ...current,
+                          lifecycle:
+                            value === (device.conflicts.lifecycle.localValue ?? "")
+                              ? "local"
+                              : "upstream",
+                        }));
+                        field.onChange(value);
+                      }}
+                    />
                     <FormMessage />
                   </FormItem>
                 )}
@@ -357,13 +457,26 @@ function DeviceDetailContent(props: { device: DeviceListItem }): JSX.Element {
                       <Input
                         {...field}
                         value={field.value}
-                        placeholder="z. B. GW5-002931"
+                        placeholder="z.B. GW5-002931"
                         className="h-10 rounded-md border-border/80 bg-background px-3 font-mono"
                       />
                     </FormControl>
-                    {device.conflicts.serialNumber ? (
-                      <StatusPill tone="warning">Upstream-Konflikt</StatusPill>
-                    ) : null}
+                    <ConflictResolver
+                      field="serialNumber"
+                      conflict={device.conflicts.serialNumber}
+                      currentValue={field.value}
+                      onSelectValue={(value) => {
+                        setSaveError(null);
+                        setPendingConflictResolutions((current) => ({
+                          ...current,
+                          serialNumber:
+                            value === (device.conflicts.serialNumber.localValue ?? "")
+                              ? "local"
+                              : "upstream",
+                        }));
+                        field.onChange(value);
+                      }}
+                    />
                     <FormMessage />
                   </FormItem>
                 )}
@@ -379,13 +492,27 @@ function DeviceDetailContent(props: { device: DeviceListItem }): JSX.Element {
                       <Input
                         {...field}
                         value={field.value}
-                        placeholder="z. B. A4:CF:12:AB:CD:EF"
-                        className="h-10 rounded-md border-border/80 bg-background px-3 font-mono uppercase"
+                        placeholder="z.B. A4:CF:12:AB:CD:EF"
+                        className="h-10 rounded-md border-border/80 bg-background px-3 font-mono"
+                        style={{ textTransform: "uppercase" }}
                       />
                     </FormControl>
-                    {device.conflicts.macAddress ? (
-                      <StatusPill tone="warning">Upstream-Konflikt</StatusPill>
-                    ) : null}
+                    <ConflictResolver
+                      field="macAddress"
+                      conflict={device.conflicts.macAddress}
+                      currentValue={field.value}
+                      onSelectValue={(value) => {
+                        setSaveError(null);
+                        setPendingConflictResolutions((current) => ({
+                          ...current,
+                          macAddress:
+                            value === (device.conflicts.macAddress.localValue ?? "")
+                              ? "local"
+                              : "upstream",
+                        }));
+                        field.onChange(value);
+                      }}
+                    />
                     <FormMessage />
                   </FormItem>
                 )}
@@ -405,9 +532,22 @@ function DeviceDetailContent(props: { device: DeviceListItem }): JSX.Element {
                         className="min-h-28 rounded-md border-border/80 bg-background px-3 py-2.5"
                       />
                     </FormControl>
-                    {device.conflicts.notes ? (
-                      <StatusPill tone="warning">Upstream-Konflikt</StatusPill>
-                    ) : null}
+                    <ConflictResolver
+                      field="notes"
+                      conflict={device.conflicts.notes}
+                      currentValue={field.value}
+                      onSelectValue={(value) => {
+                        setSaveError(null);
+                        setPendingConflictResolutions((current) => ({
+                          ...current,
+                          notes:
+                            value === (device.conflicts.notes.localValue ?? "")
+                              ? "local"
+                              : "upstream",
+                        }));
+                        field.onChange(value);
+                      }}
+                    />
                     <FormMessage />
                   </FormItem>
                 )}
@@ -419,9 +559,10 @@ function DeviceDetailContent(props: { device: DeviceListItem }): JSX.Element {
                 type="button"
                 variant="outline"
                 className="h-9 rounded-md border-border/80 bg-background px-3"
-                disabled={!form.formState.isDirty || saveLocalChangesMutation.isPending}
+                disabled={!canSubmitChanges || saveLocalChangesMutation.isPending}
                 onClick={() => {
                   setSaveError(null);
+                  setPendingConflictResolutions({});
                   form.reset(toFormValues(device));
                 }}
               >
@@ -430,7 +571,7 @@ function DeviceDetailContent(props: { device: DeviceListItem }): JSX.Element {
               <Button
                 type="submit"
                 className="h-9 rounded-md px-4"
-                disabled={!form.formState.isDirty || saveLocalChangesMutation.isPending}
+                disabled={!canSubmitChanges || saveLocalChangesMutation.isPending}
               >
                 {saveLocalChangesMutation.isPending ? "Speichert..." : "Änderungen speichern"}
               </Button>
@@ -439,20 +580,6 @@ function DeviceDetailContent(props: { device: DeviceListItem }): JSX.Element {
             {saveError ? (
               <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                 Änderungen konnten nicht gespeichert werden. {saveError}
-              </div>
-            ) : null}
-
-            {device.conflicts.hasAny ? (
-              <div className="space-y-2">
-                <Separator />
-                <p className="text-sm font-medium text-foreground">Konflikte</p>
-                <div className="flex flex-wrap gap-2">
-                  {conflictFields.map((field) => (
-                    <StatusPill key={field} tone="warning">
-                      {editableFieldLabels[field]}
-                    </StatusPill>
-                  ))}
-                </div>
               </div>
             ) : null}
           </div>
@@ -510,7 +637,7 @@ function DeviceDetailContent(props: { device: DeviceListItem }): JSX.Element {
                 value: emptyValue(device.macAddress, "Keine MAC-Adresse"),
               },
               {
-                label: "Upstream ID",
+                label: "Heizma ID",
                 value: device.id,
               },
             ]}
