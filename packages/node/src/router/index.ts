@@ -1,45 +1,32 @@
 import { z } from "zod";
 import { prisma } from "../db.js";
-import { mergeDevice, type MergedDevice } from "../devices/merge.js";
+import { buildDeviceKpis } from "../devices/kpis.js";
+import {
+  matchesDeviceBaseFilters,
+  matchesDeviceListFilters,
+  type DeviceBaseFilters,
+} from "../devices/filters.js";
+import { mergeDevice } from "../devices/merge.js";
 import { publicProcedure, router } from "../trpc.js";
 
-const deviceListFiltersSchema = z
-  .object({
-    search: z.string().trim().optional(),
+const deviceBaseFiltersSchema = z.object({
+  search: z.string().trim().optional(),
+  deviceType: z.string().trim().optional(),
+});
+
+const deviceListFiltersSchema = deviceBaseFiltersSchema
+  .extend({
     lifecycle: z.string().trim().optional(),
-    deviceType: z.string().trim().optional(),
   })
   .optional();
 
-function matchesDeviceFilters(
-  device: MergedDevice,
-  filters: {
-    search: string;
-    lifecycle: string;
-    deviceType: string;
-  },
-): boolean {
-  if (filters.lifecycle && device.lifecycle !== filters.lifecycle) {
-    return false;
-  }
+const deviceBaseFiltersInputSchema = deviceBaseFiltersSchema.optional();
 
-  if (filters.deviceType && device.deviceType !== filters.deviceType) {
-    return false;
-  }
-
-  if (!filters.search) {
-    return true;
-  }
-
-  const searchNeedle = filters.search.toLocaleLowerCase();
-  const searchableValues = [
-    device.customer.name,
-    device.customer.state,
-    device.serialNumber,
-    device.macAddress,
-  ];
-
-  return searchableValues.some((value) => value?.toLocaleLowerCase().includes(searchNeedle));
+function toDeviceBaseFilters(input: { search?: string; deviceType?: string } | undefined): DeviceBaseFilters {
+  return {
+    search: input?.search ?? "",
+    deviceType: input?.deviceType ?? "",
+  };
 }
 
 export const appRouter = router({
@@ -57,10 +44,10 @@ export const appRouter = router({
   }),
   devices: router({
     list: publicProcedure.input(deviceListFiltersSchema).query(async ({ input }) => {
+      const baseFilters = toDeviceBaseFilters(input);
       const filters = {
-        search: input?.search ?? "",
+        ...baseFilters,
         lifecycle: input?.lifecycle ?? "",
-        deviceType: input?.deviceType ?? "",
       };
 
       const devices = await prisma.device.findMany({
@@ -74,7 +61,21 @@ export const appRouter = router({
 
       return devices
         .map((device) => mergeDevice(device, device.overlay))
-        .filter((device) => matchesDeviceFilters(device, filters));
+        .filter((device) => matchesDeviceListFilters(device, filters));
+    }),
+    kpis: publicProcedure.input(deviceBaseFiltersInputSchema).query(async ({ input }) => {
+      const filters = toDeviceBaseFilters(input);
+      const devices = await prisma.device.findMany({
+        include: {
+          overlay: true,
+        },
+      });
+
+      const filteredDevices = devices
+        .map((device) => mergeDevice(device, device.overlay))
+        .filter((device) => matchesDeviceBaseFilters(device, filters));
+
+      return buildDeviceKpis(filteredDevices);
     }),
     deviceTypes: publicProcedure.query(async () => {
       const devices = await prisma.device.findMany({

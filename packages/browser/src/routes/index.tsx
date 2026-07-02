@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select.tsx";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip.tsx";
 import { DataTable } from "@/components/data-table.tsx";
 import { toDeviceTableRows, type DeviceTableRow } from "@/devices.ts";
 import { rootRoute } from "./__root.tsx";
@@ -28,6 +29,8 @@ const lifecycleOptions = [
   "Offline",
   "Storniert",
 ] as const;
+const installationDueLabel = "Installation steht an";
+const installationDueHint = "Installationen, die diese oder die nächste Woche geplant sind.";
 
 const deviceColumns: ColumnDef<DeviceTableRow>[] = [
   {
@@ -113,12 +116,21 @@ function IndexPage(): JSX.Element {
   const [lifecycle, setLifecycle] = useState(allFilterValue);
   const [deviceType, setDeviceType] = useState(allFilterValue);
   const deferredSearch = useDeferredValue(search);
+  const trimmedSearch = deferredSearch.trim();
+  const selectedLifecycle = toQueryFilterValue(lifecycle);
+  const selectedDeviceType = toQueryFilterValue(deviceType);
 
   const devicesQuery = useQuery(
     trpc.devices.list.queryOptions({
-      search: deferredSearch.trim(),
-      lifecycle: toQueryFilterValue(lifecycle),
-      deviceType: toQueryFilterValue(deviceType),
+      search: trimmedSearch,
+      lifecycle: selectedLifecycle,
+      deviceType: selectedDeviceType,
+    }),
+  );
+  const kpisQuery = useQuery(
+    trpc.devices.kpis.queryOptions({
+      search: trimmedSearch,
+      deviceType: selectedDeviceType,
     }),
   );
   const deviceTypesQuery = useQuery(trpc.devices.deviceTypes.queryOptions());
@@ -138,7 +150,11 @@ function IndexPage(): JSX.Element {
 
           <Button
             onClick={() => {
-              void Promise.all([devicesQuery.refetch(), deviceTypesQuery.refetch()]);
+              void Promise.all([
+                devicesQuery.refetch(),
+                kpisQuery.refetch(),
+                deviceTypesQuery.refetch(),
+              ]);
             }}
             className="rounded-full px-5"
           >
@@ -149,6 +165,66 @@ function IndexPage(): JSX.Element {
 
       <section className="mx-auto flex w-full max-w-[1680px] flex-col gap-6 px-4 py-5 sm:px-6">
         <section className="overflow-hidden rounded-[1.75rem] border border-border/90 bg-background/96 shadow-[0_24px_80px_rgba(16,31,22,0.06)]">
+          <div className="border-b border-border/80 bg-[#f7f8f1] px-5 py-4">
+            {kpisQuery.isLoading ? (
+              <div className="text-sm text-muted-foreground">Loading fleet summary...</div>
+            ) : null}
+
+            {!kpisQuery.isLoading && kpisQuery.error ? (
+              <div className="text-sm text-red-700">Could not load fleet summary.</div>
+            ) : null}
+
+            {!kpisQuery.isLoading && !kpisQuery.error && kpisQuery.data ? (
+              <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-9">
+                {kpisQuery.data.lifecycleCounts.map((item) => {
+                  const isActive = selectedLifecycle === item.lifecycle;
+
+                  return (
+                    <button
+                      key={item.lifecycle}
+                      type="button"
+                      onClick={() => {
+                        setLifecycle(isActive ? allFilterValue : item.lifecycle);
+                      }}
+                      className={[
+                        "group rounded-[1.15rem] border px-4 py-3 text-left transition-colors",
+                        isActive
+                          ? "border-primary bg-primary text-primary-foreground shadow-[0_10px_30px_rgba(22,166,55,0.2)]"
+                          : "border-border/80 bg-background hover:border-primary/40 hover:bg-white",
+                      ].join(" ")}
+                    >
+                      <p
+                        className={[
+                          "text-[0.66rem] font-semibold uppercase tracking-[0.22em]",
+                          isActive ? "text-primary-foreground/80" : "text-muted-foreground",
+                        ].join(" ")}
+                      >
+                        {item.lifecycle}
+                      </p>
+                      <p className="mt-2 text-2xl font-semibold">{item.count}</p>
+                    </button>
+                  );
+                })}
+
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="rounded-[1.15rem] border border-border/80 bg-background px-4 py-3">
+                      <p className="text-[0.66rem] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                        {installationDueLabel}
+                      </p>
+                      <p className="mt-2 text-2xl font-semibold text-foreground">
+                        {kpisQuery.data.installationDueCount}
+                      </p>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" align="start">
+                    {installationDueHint}
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            ) : null}
+          </div>
+
           <div className="border-b border-border/80 bg-[#fcfcf7] px-5 py-5">
             <div className="flex flex-col gap-4 2xl:flex-row 2xl:items-end 2xl:justify-between">
               <div className="grid flex-1 gap-4 lg:grid-cols-[minmax(0,1.9fr)_240px_240px]">
@@ -212,11 +288,7 @@ function IndexPage(): JSX.Element {
                 </label>
               </div>
 
-              <div className="flex items-center justify-between gap-4 pt-1 2xl:justify-end">
-                <p className="text-sm font-medium text-muted-foreground">
-                  {devicesQuery.data ? `${devicesQuery.data.length} devices` : "Filtering fleet"}
-                </p>
-
+              <div className="flex items-center justify-end gap-4 pt-1">
                 <Button
                   variant="outline"
                   className="h-11 rounded-xl border-border/80 bg-background px-4"
