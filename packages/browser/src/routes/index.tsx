@@ -1,4 +1,4 @@
-import { useDeferredValue, useState, type JSX } from "react";
+import { startTransition, useDeferredValue, useEffect, useState, type JSX } from "react";
 import { createRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
@@ -44,14 +44,58 @@ function toQueryFilterValue(value: string): string {
 function IndexPage(): JSX.Element {
   const navigate = useNavigate({ from: indexRoute.id });
   const queryClient = useQueryClient();
-  const { deviceId } = indexRoute.useSearch();
-  const [search, setSearch] = useState("");
-  const [lifecycle, setLifecycle] = useState(allFilterValue);
-  const [deviceType, setDeviceType] = useState(allFilterValue);
-  const deferredSearch = useDeferredValue(search);
+  const { deviceId, deviceType, lifecycle, search } = indexRoute.useSearch();
+  const [searchInput, setSearchInput] = useState(search);
+  const [selectedLifecycleFilter, setSelectedLifecycleFilter] = useState(lifecycle);
+  const [selectedDeviceTypeFilter, setSelectedDeviceTypeFilter] = useState(deviceType);
+  const deferredSearch = useDeferredValue(searchInput);
   const trimmedSearch = deferredSearch.trim();
-  const selectedLifecycle = toQueryFilterValue(lifecycle);
-  const selectedDeviceType = toQueryFilterValue(deviceType);
+  const selectedLifecycle = toQueryFilterValue(selectedLifecycleFilter);
+  const selectedDeviceType = toQueryFilterValue(selectedDeviceTypeFilter);
+
+  useEffect(() => {
+    setSearchInput(search);
+  }, [search]);
+
+  useEffect(() => {
+    setSelectedLifecycleFilter(lifecycle);
+  }, [lifecycle]);
+
+  useEffect(() => {
+    setSelectedDeviceTypeFilter(deviceType);
+  }, [deviceType]);
+
+  useEffect(() => {
+    const normalizedSearch = searchInput;
+    const normalizedLifecycle = selectedLifecycleFilter;
+    const normalizedDeviceType = selectedDeviceTypeFilter;
+
+    if (
+      normalizedSearch === search &&
+      normalizedLifecycle === lifecycle &&
+      normalizedDeviceType === deviceType
+    ) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      startTransition(() => {
+        void navigate({
+          search: (previous) => ({
+            ...previous,
+            search: normalizedSearch,
+            lifecycle: normalizedLifecycle,
+            deviceType: normalizedDeviceType,
+          }),
+          replace: true,
+        });
+      });
+    }, 180);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [deviceType, lifecycle, navigate, search, searchInput, selectedDeviceTypeFilter, selectedLifecycleFilter]);
 
   const devicesQuery = useQuery(
     trpc.devices.list.queryOptions({
@@ -230,7 +274,7 @@ function IndexPage(): JSX.Element {
                       key={item.lifecycle}
                       type="button"
                       onClick={() => {
-                        setLifecycle(isActive ? allFilterValue : item.lifecycle);
+                        setSelectedLifecycleFilter(isActive ? allFilterValue : item.lifecycle);
                       }}
                       className={[
                         "group rounded-[1.15rem] border px-4 py-3 text-left transition-colors",
@@ -279,9 +323,9 @@ function IndexPage(): JSX.Element {
                     Search
                   </span>
                   <Input
-                    value={search}
+                    value={searchInput}
                     onChange={(event) => {
-                      setSearch(event.target.value);
+                      setSearchInput(event.target.value);
                     }}
                     placeholder="Customer, serial or MAC"
                     aria-label="Search customer, serial or MAC"
@@ -293,7 +337,12 @@ function IndexPage(): JSX.Element {
                   <span className="block text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
                     Lifecycle
                   </span>
-                  <Select value={lifecycle} onValueChange={setLifecycle}>
+                  <Select
+                    value={selectedLifecycleFilter}
+                    onValueChange={(value) => {
+                      setSelectedLifecycleFilter(value);
+                    }}
+                  >
                     <SelectTrigger
                       className="h-11 w-full rounded-xl border-border/80 bg-background px-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]"
                       aria-label="Filter by lifecycle"
@@ -315,7 +364,12 @@ function IndexPage(): JSX.Element {
                   <span className="block text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
                     Device type
                   </span>
-                  <Select value={deviceType} onValueChange={setDeviceType}>
+                  <Select
+                    value={selectedDeviceTypeFilter}
+                    onValueChange={(value) => {
+                      setSelectedDeviceTypeFilter(value);
+                    }}
+                  >
                     <SelectTrigger
                       className="h-11 w-full rounded-xl border-border/80 bg-background px-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]"
                       aria-label="Filter by device type"
@@ -339,9 +393,9 @@ function IndexPage(): JSX.Element {
                   variant="outline"
                   className="h-11 rounded-xl border-border/80 bg-background px-4"
                   onClick={() => {
-                    setSearch("");
-                    setLifecycle(allFilterValue);
-                    setDeviceType(allFilterValue);
+                    setSearchInput("");
+                    setSelectedLifecycleFilter(allFilterValue);
+                    setSelectedDeviceTypeFilter(allFilterValue);
                   }}
                 >
                   Reset
@@ -416,6 +470,9 @@ export const indexRoute = createRoute({
   path: "/",
   validateSearch: (search) => ({
     deviceId: typeof search.deviceId === "string" ? search.deviceId : undefined,
+    search: typeof search.search === "string" ? search.search : "",
+    lifecycle: typeof search.lifecycle === "string" ? search.lifecycle : allFilterValue,
+    deviceType: typeof search.deviceType === "string" ? search.deviceType : allFilterValue,
   }),
   component: IndexPage,
 });
