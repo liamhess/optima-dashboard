@@ -29,6 +29,9 @@ const deviceListFiltersSchema = deviceBaseFiltersSchema
   .optional();
 
 const deviceBaseFiltersInputSchema = deviceBaseFiltersSchema.optional();
+const advanceLifecycleInputSchema = z.object({
+  id: z.string().min(1),
+});
 const updateLocalChangesInputSchema = z.object({
   id: z.string().min(1),
   lifecycle: z.string().trim().min(1),
@@ -74,40 +77,81 @@ function toLocalTimestampValues(
   };
 }
 
-function hasEffectiveLocalChanges(
-  device: {
-    lifecycle: string;
-    serialNumber: string | null;
-    macAddress: string | null;
-    notes: string | null;
-    shippedAt: Date | null;
-    installedAt: Date | null;
-    activatedAt: Date | null;
-  },
-  values: EditableDeviceValues,
-  timestamps: LocalTimestampValues,
-): boolean {
-  return (
-    values.lifecycle !== device.lifecycle ||
-    values.serialNumber !== device.serialNumber ||
-    values.macAddress !== device.macAddress ||
-    values.notes !== device.notes ||
-    timestamps.shippedAt?.getTime() !== device.shippedAt?.getTime() ||
-    timestamps.installedAt?.getTime() !== device.installedAt?.getTime() ||
-    timestamps.activatedAt?.getTime() !== device.activatedAt?.getTime()
-  );
+type LocalChangeBaseline = {
+  id: string;
+  lifecycle: string;
+  serialNumber: string | null;
+  macAddress: string | null;
+  notes: string | null;
+  shippedAt: Date | null;
+  installedAt: Date | null;
+  activatedAt: Date | null;
+};
+
+function toMergedEditableDeviceValues(device: {
+  lifecycle: string;
+  serialNumber: string | null;
+  macAddress: string | null;
+  notes: string | null;
+}): EditableDeviceValues {
+  return {
+    lifecycle: device.lifecycle,
+    serialNumber: device.serialNumber,
+    macAddress: device.macAddress,
+    notes: device.notes,
+  };
 }
 
-function buildPersistedLocalChanges(
-  device: {
-    lifecycle: string;
-    serialNumber: string | null;
-    macAddress: string | null;
-    notes: string | null;
-    shippedAt: Date | null;
-    installedAt: Date | null;
-    activatedAt: Date | null;
-  },
+function toMergedLocalTimestampValues(device: {
+  shippedAt: Date | null;
+  installedAt: Date | null;
+  activatedAt: Date | null;
+}): LocalTimestampValues {
+  return {
+    shippedAt: device.shippedAt,
+    installedAt: device.installedAt,
+    activatedAt: device.activatedAt,
+  };
+}
+
+// TODO: Move this guided lifecycle definition into shared code once `packages/common` exists.
+function getLifecycleAdvance(lifecycle: string): {
+  nextLifecycle: string;
+  timestampField: LocalTimestampField | null;
+} | null {
+  if (lifecycle === "Bestellt") {
+    return {
+      nextLifecycle: "Verschickt",
+      timestampField: "shippedAt",
+    };
+  }
+
+  if (lifecycle === "Verschickt") {
+    return {
+      nextLifecycle: "Verbaut",
+      timestampField: "installedAt",
+    };
+  }
+
+  if (lifecycle === "Verbaut") {
+    return {
+      nextLifecycle: "Aktiviert",
+      timestampField: "activatedAt",
+    };
+  }
+
+  if (lifecycle === "Aktiviert") {
+    return {
+      nextLifecycle: "Online",
+      timestampField: null,
+    };
+  }
+
+  return null;
+}
+
+function buildLocalChangePersistence(
+  device: LocalChangeBaseline,
   values: EditableDeviceValues,
   timestamps: LocalTimestampValues,
 ): {
@@ -170,6 +214,37 @@ type PersistedLocalChanges = {
   baseMacAddress: string | null;
   baseNotes: string | null;
 };
+
+async function persistLocalChanges(
+  device: LocalChangeBaseline,
+  values: EditableDeviceValues,
+  timestamps: LocalTimestampValues,
+) {
+  const { hasAnyLocalChanges, persistedValues } = buildLocalChangePersistence(device, values, timestamps);
+
+  if (!hasAnyLocalChanges) {
+    await prisma.deviceOverlay.deleteMany({
+      where: {
+        deviceId: device.id,
+      },
+    });
+
+    return null;
+  }
+
+  return prisma.deviceOverlay.upsert({
+    where: {
+      deviceId: device.id,
+    },
+    create: {
+      deviceId: device.id,
+      ...persistedValues,
+    },
+    update: {
+      ...persistedValues,
+    },
+  });
+}
 
 export const appRouter = router({
   health: publicProcedure.query(() => {
@@ -244,6 +319,38 @@ export const appRouter = router({
         })
         .then((device) => mergeDevice(device, device.overlay));
     }),
+    advanceLifecycle: publicProcedure
+      .input(advanceLifecycleInputSchema)
+      .mutation(async ({ input }) => {
+        const device = await prisma.device.findUniqueOrThrow({
+          where: {
+            id: input.id,
+          },
+          include: {
+            overlay: true,
+          },
+        });
+
+        const mergedDevice = mergeDevice(device, device.overlay);
+        const advance = getLifecycleAdvance(mergedDevice.lifecycle);
+
+        if (!advance) {
+          throw new Error(`Lifecycle ${mergedDevice.lifecycle} cannot be advanced.`);
+        }
+
+        const values = toMergedEditableDeviceValues(mergedDevice);
+        const timestamps = toMergedLocalTimestampValues(mergedDevice);
+
+        values.lifecycle = advance.nextLifecycle;
+
+        if (advance.timestampField && !timestamps[advance.timestampField]) {
+          timestamps[advance.timestampField] = new Date();
+        }
+
+        const localChanges = await persistLocalChanges(device, values, timestamps);
+
+        return mergeDevice(device, localChanges);
+      }),
     updateLocalChanges: publicProcedure
       .input(updateLocalChangesInputSchema)
       .mutation(async ({ input }) => {
@@ -255,34 +362,7 @@ export const appRouter = router({
 
         const values = toEditableDeviceValues(input);
         const timestamps = toLocalTimestampValues(input);
-        const { hasAnyLocalChanges, persistedValues } = buildPersistedLocalChanges(
-          device,
-          values,
-          timestamps,
-        );
-
-        if (!hasAnyLocalChanges || !hasEffectiveLocalChanges(device, values, timestamps)) {
-          await prisma.deviceOverlay.deleteMany({
-            where: {
-              deviceId: device.id,
-            },
-          });
-
-          return mergeDevice(device, null);
-        }
-
-        const localChanges = await prisma.deviceOverlay.upsert({
-          where: {
-            deviceId: device.id,
-          },
-          create: {
-            deviceId: device.id,
-            ...persistedValues,
-          },
-          update: {
-            ...persistedValues,
-          },
-        });
+        const localChanges = await persistLocalChanges(device, values, timestamps);
 
         return mergeDevice(device, localChanges);
       }),

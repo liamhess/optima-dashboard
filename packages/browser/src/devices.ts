@@ -78,6 +78,7 @@ export function toIsoDateTimeString(value: Date | string | null): string | null 
   return parsedValue ? parsedValue.toISOString() : null;
 }
 
+// TODO: Move this guided lifecycle definition into shared code once `packages/common` exists.
 export function getGuidedLifecycleAdvance(lifecycle: string): GuidedLifecycleAdvance | null {
   if (lifecycle === "Bestellt") {
     return {

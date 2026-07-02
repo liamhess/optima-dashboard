@@ -319,20 +319,29 @@ function DeviceDetailContent(props: { device: DeviceListItem }): JSX.Element {
   const watchedInstalledAt = form.watch("installedAt");
   const watchedActivatedAt = form.watch("activatedAt");
   const guidedAdvance = getGuidedLifecycleAdvance(watchedLifecycle);
+  async function handleDeviceMutationSuccess(savedDevice: DeviceListItem): Promise<void> {
+    setSaveError(null);
+    setPendingConflictResolutions({});
+    form.reset(toFormValues(savedDevice));
+
+    await Promise.all([
+      queryClient.invalidateQueries(trpc.devices.byId.queryFilter({ id: device.id })),
+      queryClient.invalidateQueries(trpc.devices.list.pathFilter()),
+      queryClient.invalidateQueries(trpc.devices.kpis.pathFilter()),
+    ]);
+  }
+
   const saveLocalChangesMutation = useMutation(
     trpc.devices.updateLocalChanges.mutationOptions({
-      onSuccess: async (savedDevice): Promise<void> => {
-        setSaveError(null);
-        setPendingConflictResolutions({});
-        form.reset(toFormValues(savedDevice));
-        queryClient.setQueryData(trpc.devices.byId.queryKey({ id: device.id }), savedDevice);
-
-        await Promise.all([
-          queryClient.invalidateQueries(trpc.devices.byId.queryFilter({ id: device.id })),
-          queryClient.invalidateQueries(trpc.devices.list.pathFilter()),
-          queryClient.invalidateQueries(trpc.devices.kpis.pathFilter()),
-        ]);
+      onSuccess: handleDeviceMutationSuccess,
+      onError: (error): void => {
+        setSaveError(error.message);
       },
+    }),
+  );
+  const advanceLifecycleMutation = useMutation(
+    trpc.devices.advanceLifecycle.mutationOptions({
+      onSuccess: handleDeviceMutationSuccess,
       onError: (error): void => {
         setSaveError(error.message);
       },
@@ -369,6 +378,7 @@ function DeviceDetailContent(props: { device: DeviceListItem }): JSX.Element {
   ];
   const hasPendingConflictResolutions = Object.keys(pendingConflictResolutions).length > 0;
   const canSubmitChanges = form.formState.isDirty || hasPendingConflictResolutions;
+  const isActionPending = saveLocalChangesMutation.isPending || advanceLifecycleMutation.isPending;
 
   return (
     <Form {...form}>
@@ -438,25 +448,12 @@ function DeviceDetailContent(props: { device: DeviceListItem }): JSX.Element {
                               variant="outline"
                               size="icon"
                               className="size-8 rounded-md border-border/80 bg-background"
+                              disabled={canSubmitChanges || isActionPending}
                               onClick={() => {
                                 setSaveError(null);
-                                field.onChange(guidedAdvance.nextLifecycle);
-
-                                if (guidedAdvance.timestampField) {
-                                  const currentTimestampValue = form.getValues(
-                                    guidedAdvance.timestampField,
-                                  );
-
-                                  if (!currentTimestampValue) {
-                                    form.setValue(
-                                      guidedAdvance.timestampField,
-                                      new Date().toISOString(),
-                                      {
-                                        shouldDirty: true,
-                                      },
-                                    );
-                                  }
-                                }
+                                void advanceLifecycleMutation.mutateAsync({
+                                  id: device.id,
+                                });
                               }}
                               aria-label={`Weiter zu ${guidedAdvance.nextLifecycle}`}
                             >
@@ -629,7 +626,7 @@ function DeviceDetailContent(props: { device: DeviceListItem }): JSX.Element {
                 type="button"
                 variant="outline"
                 className="h-9 rounded-md border-border/80 bg-background px-3"
-                disabled={!canSubmitChanges || saveLocalChangesMutation.isPending}
+                disabled={!canSubmitChanges || isActionPending}
                 onClick={() => {
                   setSaveError(null);
                   setPendingConflictResolutions({});
@@ -641,7 +638,7 @@ function DeviceDetailContent(props: { device: DeviceListItem }): JSX.Element {
               <Button
                 type="submit"
                 className="h-9 rounded-md px-4"
-                disabled={!canSubmitChanges || saveLocalChangesMutation.isPending}
+                disabled={!canSubmitChanges || isActionPending}
               >
                 {saveLocalChangesMutation.isPending ? "Speichert..." : "Änderungen speichern"}
               </Button>
