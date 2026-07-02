@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useState, type JSX } from "react";
+import { startTransition, useEffect, useMemo, useState, type JSX } from "react";
 import { createRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { functionalUpdate, type ColumnDef, type SortingState } from "@tanstack/react-table";
@@ -407,7 +407,10 @@ function IndexPage(): JSX.Element {
       },
     }),
   );
-  const deviceRows = devicesQuery.data ? toDeviceTableRows(devicesQuery.data) : [];
+  const deviceRows = useMemo(
+    () => (devicesQuery.data ? toDeviceTableRows(devicesQuery.data) : []),
+    [devicesQuery.data],
+  );
   const deviceTypeOptions = deviceTypesQuery.data ?? [];
   const selectedDevice = selectedDeviceQuery.data as DeviceListItem | undefined;
 
@@ -422,6 +425,7 @@ function IndexPage(): JSX.Element {
           installationDue: nextFilters.installationDue,
         }),
         replace,
+        resetScroll: false,
       });
     });
   }
@@ -438,6 +442,7 @@ function IndexPage(): JSX.Element {
           sortDirection: nextSort?.desc ? "desc" : nextSort ? "asc" : undefined,
         }),
         replace: false,
+        resetScroll: false,
       });
     });
   }
@@ -455,130 +460,136 @@ function IndexPage(): JSX.Element {
           sortDirection: defaultDeviceSortDirection,
         }),
         replace: false,
+        resetScroll: false,
       });
     });
   }
 
-  const deviceColumns: ColumnDef<DeviceTableRow>[] = [
-    {
-      id: "customerName",
-      accessorKey: "customerName",
-      enableSorting: true,
-      header: "Kunde",
-      cell: ({ row }) => <p className="font-medium text-foreground">{row.original.customerName}</p>,
-    },
-    {
-      id: "customerState",
-      accessorKey: "customerState",
-      enableSorting: true,
-      header: "Ort",
-      cell: ({ row }) => (
-        <span className="text-sm text-muted-foreground">{row.original.customerState}</span>
-      ),
-    },
-    {
-      id: "deviceType",
-      accessorKey: "deviceType",
-      enableSorting: true,
-      header: "Gerätetyp",
-      cell: ({ row }) => (
-        <span className="font-medium text-foreground">{row.original.deviceType}</span>
-      ),
-    },
-    {
-      id: "lifecycle",
-      accessorKey: "lifecycle",
-      enableSorting: true,
-      header: "Lifecycle",
-      cell: ({ row }) => {
-        const guidedAdvance = getGuidedLifecycleAdvance(row.original.lifecycle);
-        const isPending =
-          advanceLifecycleMutation.isPending &&
-          advanceLifecycleMutation.variables?.id === row.original.id;
-
-        return (
-          <div className="flex items-center gap-2">
-            <Badge
-              variant="secondary"
-              className="rounded-full border border-border/60 bg-secondary px-3 py-1 text-foreground"
-            >
-              {row.original.lifecycle}
-            </Badge>
-            {guidedAdvance ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    className="size-7 rounded-full border-border/80 bg-background"
-                    disabled={isPending}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      void advanceLifecycleMutation.mutateAsync({ id: row.original.id });
-                    }}
-                    aria-label={`Weiter zu ${guidedAdvance.nextLifecycle}`}
-                  >
-                    <ArrowRightIcon className="size-3.5" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="top">Weiter zu {guidedAdvance.nextLifecycle}</TooltipContent>
-              </Tooltip>
-            ) : null}
-          </div>
-        );
+  const deviceColumns = useMemo<ColumnDef<DeviceTableRow>[]>(
+    () => [
+      {
+        id: "customerName",
+        accessorKey: "customerName",
+        enableSorting: true,
+        header: "Kunde",
+        cell: ({ row }) => (
+          <p className="font-medium text-foreground">{row.original.customerName}</p>
+        ),
       },
-    },
-    {
-      id: "identifier",
-      enableSorting: false,
-      header: "Serial / MAC",
-      cell: ({ row }) => (
-        <div className="space-y-1">
-          <p className="font-mono text-xs text-foreground">
-            {row.original.serialNumber ?? "No serial"}
-          </p>
-          <div className="flex items-center gap-2">
-            <p className="font-mono text-xs text-muted-foreground">
-              {row.original.macAddress ?? "No MAC"}
+      {
+        id: "customerState",
+        accessorKey: "customerState",
+        enableSorting: true,
+        header: "Ort",
+        cell: ({ row }) => (
+          <span className="text-sm text-muted-foreground">{row.original.customerState}</span>
+        ),
+      },
+      {
+        id: "deviceType",
+        accessorKey: "deviceType",
+        enableSorting: true,
+        header: "Gerätetyp",
+        cell: ({ row }) => (
+          <span className="font-medium text-foreground">{row.original.deviceType}</span>
+        ),
+      },
+      {
+        id: "lifecycle",
+        accessorKey: "lifecycle",
+        enableSorting: true,
+        header: "Lifecycle",
+        cell: ({ row }) => {
+          const guidedAdvance = getGuidedLifecycleAdvance(row.original.lifecycle);
+          const isPending =
+            advanceLifecycleMutation.isPending &&
+            advanceLifecycleMutation.variables?.id === row.original.id;
+
+          return (
+            <div className="flex items-center gap-2">
+              <Badge
+                variant="secondary"
+                className="rounded-full border border-border/60 bg-secondary px-3 py-1 text-foreground"
+              >
+                {row.original.lifecycle}
+              </Badge>
+              {guidedAdvance ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="size-7 rounded-full border-border/80 bg-background"
+                      disabled={isPending}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void advanceLifecycleMutation.mutateAsync({ id: row.original.id });
+                      }}
+                      aria-label={`Weiter zu ${guidedAdvance.nextLifecycle}`}
+                    >
+                      <ArrowRightIcon className="size-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">Weiter zu {guidedAdvance.nextLifecycle}</TooltipContent>
+                </Tooltip>
+              ) : null}
+            </div>
+          );
+        },
+      },
+      {
+        id: "identifier",
+        enableSorting: false,
+        header: "Serial / MAC",
+        cell: ({ row }) => (
+          <div className="space-y-1">
+            <p className="font-mono text-xs text-foreground">
+              {row.original.serialNumber ?? "No serial"}
             </p>
-            <CopyValueButton
-              copyLabel="MAC-Adresse kopieren"
-              copiedLabel="MAC-Adresse kopiert"
-              value={row.original.macAddress}
-              onClick={(event) => {
-                event.stopPropagation();
-              }}
-            />
+            <div className="flex items-center gap-2">
+              <p className="font-mono text-xs text-muted-foreground">
+                {row.original.macAddress ?? "No MAC"}
+              </p>
+              <CopyValueButton
+                copyLabel="MAC-Adresse kopieren"
+                copiedLabel="MAC-Adresse kopiert"
+                value={row.original.macAddress}
+                onClick={(event) => {
+                  event.stopPropagation();
+                }}
+              />
+            </div>
           </div>
-        </div>
-      ),
-    },
-    {
-      id: "installationDate",
-      accessorKey: "installationDateLabel",
-      enableSorting: true,
-      header: "Installation",
-      cell: ({ row }) => (
-        <span className="text-sm text-foreground">{row.original.installationDateLabel}</span>
-      ),
-    },
-    {
-      id: "onlineLabel",
-      accessorKey: "onlineLabel",
-      enableSorting: false,
-      header: "Online",
-      cell: ({ row }) => (
-        <div className="flex items-center gap-2">
-          <span
-            className={onlineIndicatorClassNameByTone[row.original.onlineTone]}
-            aria-hidden="true"
-          />
-          <span className="font-medium text-foreground">{row.original.onlineLabel}</span>
-        </div>
-      ),
-    },
-  ];
+        ),
+      },
+      {
+        id: "installationDate",
+        accessorKey: "installationDateLabel",
+        enableSorting: true,
+        header: "Installation",
+        cell: ({ row }) => (
+          <span className="text-sm text-foreground">{row.original.installationDateLabel}</span>
+        ),
+      },
+      {
+        id: "onlineLabel",
+        accessorKey: "onlineLabel",
+        enableSorting: false,
+        header: "Online",
+        cell: ({ row }) => (
+          <div className="flex items-center gap-2">
+            <span
+              className={onlineIndicatorClassNameByTone[row.original.onlineTone]}
+              aria-hidden="true"
+            />
+            <span className="font-medium text-foreground">{row.original.onlineLabel}</span>
+          </div>
+        ),
+      },
+    ],
+    [advanceLifecycleMutation.isPending, advanceLifecycleMutation.variables?.id],
+  );
 
   return (
     <main className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,#fafaf5_100%)]">
@@ -657,6 +668,7 @@ function IndexPage(): JSX.Element {
                     deviceId: row.id,
                   }),
                   replace: false,
+                  resetScroll: false,
                 });
               }}
             />
@@ -676,6 +688,7 @@ function IndexPage(): JSX.Element {
               deviceId: undefined,
             }),
             replace: false,
+            resetScroll: false,
           });
         }}
         onRetry={() => {

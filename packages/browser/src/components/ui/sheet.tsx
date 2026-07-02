@@ -31,7 +31,7 @@ function SheetOverlay({
     <DialogPrimitive.Overlay
       data-slot="sheet-overlay"
       className={cn(
-        "fixed inset-0 z-50 bg-[rgba(11,18,13,0.28)] backdrop-blur-[2px] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0",
+        "fixed inset-0 z-50 bg-[rgba(11,18,13,0.22)] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0",
         className,
       )}
       {...props}
@@ -50,7 +50,7 @@ function SheetContent({
       <DialogPrimitive.Content
         data-slot="sheet-content"
         className={cn(
-          "fixed inset-y-0 right-0 z-50 flex h-full w-full max-w-[46rem] flex-col border-l border-border/80 bg-[linear-gradient(180deg,#fffefb_0%,#f8f8f1_100%)] shadow-[-30px_0_80px_rgba(16,31,22,0.18)] duration-300 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right-full data-[state=open]:animate-in data-[state=open]:slide-in-from-right-full sm:w-[min(46rem,92vw)]",
+          "fixed inset-y-0 right-0 z-50 flex h-full w-full max-w-[46rem] flex-col border-l border-border/80 bg-[linear-gradient(180deg,#fffefb_0%,#f8f8f1_100%)] shadow-[-12px_0_36px_rgba(16,31,22,0.14)] duration-200 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right-full data-[state=open]:animate-in data-[state=open]:slide-in-from-right-full sm:w-[min(46rem,92vw)]",
           className,
         )}
         {...props}
