@@ -1,7 +1,9 @@
 import { createRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import type { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Button } from "@/components/ui/button.tsx";
+import { DataTable } from "@/components/data-table.tsx";
 import {
   Card,
   CardContent,
@@ -12,10 +14,83 @@ import {
 import { rootRoute } from "./__root.tsx";
 import { apiBaseUrl, trpc } from "../trpc.ts";
 
+type TablePreviewRow = {
+  customer: string;
+  location: string;
+  deviceType: string;
+  lifecycle: string;
+  identifier: string;
+  installationDate: string;
+  onlineStatus: string;
+};
+
 type StatusCardProps = {
   label: string;
   value: string;
 };
+
+const tablePreviewRows: TablePreviewRow[] = [
+  {
+    customer: "Fam. Muster",
+    location: "Tirol",
+    deviceType: "GW5",
+    lifecycle: "Verschickt",
+    identifier: "GW5-002931 / A4:CF:12:AB:CD:EF",
+    installationDate: "08 Jul 2026",
+    onlineStatus: "Waiting for install",
+  },
+  {
+    customer: "M. Berger",
+    location: "Wien",
+    deviceType: "Zero",
+    lifecycle: "Online",
+    identifier: "ZERO-009102 / 80:6D:97:33:4A:AA",
+    installationDate: "01 Jul 2026",
+    onlineStatus: "Online now",
+  },
+];
+
+const tablePreviewColumns: ColumnDef<TablePreviewRow>[] = [
+  {
+    accessorKey: "customer",
+    header: "Kunde",
+  },
+  {
+    accessorKey: "location",
+    header: "Ort",
+  },
+  {
+    accessorKey: "deviceType",
+    header: "Gerätetyp",
+  },
+  {
+    accessorKey: "lifecycle",
+    header: "Lifecycle",
+    cell: ({ row }) => (
+      <Badge variant="secondary" className="rounded-full px-3 py-1 text-foreground">
+        {row.original.lifecycle}
+      </Badge>
+    ),
+  },
+  {
+    accessorKey: "identifier",
+    header: "Serial / MAC",
+    cell: ({ row }) => (
+      <span className="font-mono text-xs text-foreground">{row.original.identifier}</span>
+    ),
+  },
+  {
+    accessorKey: "installationDate",
+    header: "Installation",
+  },
+  {
+    accessorKey: "onlineStatus",
+    header: "Online",
+    cell: ({ row }) => (
+      <span className="font-medium text-foreground">{row.original.onlineStatus}</span>
+    ),
+  },
+];
 
 function IndexPage(): React.JSX.Element {
   const healthQuery = useQuery(trpc.health.queryOptions());
@@ -33,11 +108,12 @@ function IndexPage(): React.JSX.Element {
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl">
               <h1 className="max-w-[12ch] text-4xl font-semibold tracking-[-0.06em] text-foreground sm:text-6xl">
-                shadcn foundation is in place.
+                Query is live. The table shell is ready.
               </h1>
               <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground">
-                The browser app now has the router, theme tokens, aliases, and the first shadcn
-                components wired up so we can build the device table on a real UI foundation next.
+                We now have the proper server-state layer in place and a reusable table component
+                built on shadcn plus TanStack Table. The next step is swapping the preview rows for
+                real device data and wiring filters into the backend query.
               </p>
             </div>
 
@@ -102,6 +178,23 @@ function IndexPage(): React.JSX.Element {
               />
             </CardContent>
           ) : null}
+        </Card>
+
+        <Card className="rounded-[1.5rem] border-border bg-card shadow-none">
+          <CardHeader className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div className="space-y-1">
+              <CardTitle className="text-lg">Device table foundation</CardTitle>
+              <CardDescription>
+                Reusable data-table shell with the target MVP columns already modeled.
+              </CardDescription>
+            </div>
+            <Badge className="rounded-full px-3 py-1 uppercase tracking-[0.18em]">
+              table preview
+            </Badge>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <DataTable columns={tablePreviewColumns} data={tablePreviewRows} />
+          </CardContent>
         </Card>
       </section>
     </main>
