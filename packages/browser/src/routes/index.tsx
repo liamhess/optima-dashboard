@@ -27,6 +27,7 @@ import { rootRoute } from "./__root.tsx";
 import { trpc } from "../trpc.ts";
 
 const allFilterValue = "all";
+const installationDueFilterValue = "due";
 const installationDueLabel = "Installation steht an";
 const installationDueHint = "Installationen, die diese oder die nächste Woche geplant sind.";
 
@@ -44,14 +45,17 @@ function toQueryFilterValue(value: string): string {
 function IndexPage(): JSX.Element {
   const navigate = useNavigate({ from: indexRoute.id });
   const queryClient = useQueryClient();
-  const { deviceId, deviceType, lifecycle, search } = indexRoute.useSearch();
+  const { deviceId, deviceType, installationDue, lifecycle, search } = indexRoute.useSearch();
   const [searchInput, setSearchInput] = useState(search);
   const [selectedLifecycleFilter, setSelectedLifecycleFilter] = useState(lifecycle);
   const [selectedDeviceTypeFilter, setSelectedDeviceTypeFilter] = useState(deviceType);
+  const [selectedInstallationDueFilter, setSelectedInstallationDueFilter] =
+    useState(installationDue);
   const deferredSearch = useDeferredValue(searchInput);
   const trimmedSearch = deferredSearch.trim();
   const selectedLifecycle = toQueryFilterValue(selectedLifecycleFilter);
   const selectedDeviceType = toQueryFilterValue(selectedDeviceTypeFilter);
+  const hasInstallationDueFilter = selectedInstallationDueFilter === installationDueFilterValue;
 
   useEffect(() => {
     setSearchInput(search);
@@ -66,14 +70,20 @@ function IndexPage(): JSX.Element {
   }, [deviceType]);
 
   useEffect(() => {
+    setSelectedInstallationDueFilter(installationDue);
+  }, [installationDue]);
+
+  useEffect(() => {
     const normalizedSearch = searchInput;
     const normalizedLifecycle = selectedLifecycleFilter;
     const normalizedDeviceType = selectedDeviceTypeFilter;
+    const normalizedInstallationDue = selectedInstallationDueFilter;
 
     if (
       normalizedSearch === search &&
       normalizedLifecycle === lifecycle &&
-      normalizedDeviceType === deviceType
+      normalizedDeviceType === deviceType &&
+      normalizedInstallationDue === installationDue
     ) {
       return;
     }
@@ -86,6 +96,7 @@ function IndexPage(): JSX.Element {
             search: normalizedSearch,
             lifecycle: normalizedLifecycle,
             deviceType: normalizedDeviceType,
+            installationDue: normalizedInstallationDue,
           }),
           replace: true,
         });
@@ -95,19 +106,31 @@ function IndexPage(): JSX.Element {
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [deviceType, lifecycle, navigate, search, searchInput, selectedDeviceTypeFilter, selectedLifecycleFilter]);
+  }, [
+    installationDue,
+    deviceType,
+    lifecycle,
+    navigate,
+    search,
+    searchInput,
+    selectedDeviceTypeFilter,
+    selectedInstallationDueFilter,
+    selectedLifecycleFilter,
+  ]);
 
   const devicesQuery = useQuery(
     trpc.devices.list.queryOptions({
       search: trimmedSearch,
       lifecycle: selectedLifecycle,
       deviceType: selectedDeviceType,
+      installationDue: hasInstallationDueFilter,
     }),
   );
   const kpisQuery = useQuery(
     trpc.devices.kpis.queryOptions({
       search: trimmedSearch,
       deviceType: selectedDeviceType,
+      installationDue: hasInstallationDueFilter,
     }),
   );
   const deviceTypesQuery = useQuery(trpc.devices.deviceTypes.queryOptions());
@@ -298,14 +321,39 @@ function IndexPage(): JSX.Element {
 
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <div className="rounded-[1.15rem] border border-border/80 bg-background px-4 py-3">
-                      <p className="text-[0.66rem] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedInstallationDueFilter(
+                          hasInstallationDueFilter ? allFilterValue : installationDueFilterValue,
+                        );
+                      }}
+                      className={[
+                        "rounded-[1.15rem] border px-4 py-3 text-left transition-colors",
+                        hasInstallationDueFilter
+                          ? "border-primary bg-primary text-primary-foreground shadow-[0_10px_30px_rgba(22,166,55,0.2)]"
+                          : "border-border/80 bg-background hover:border-primary/40 hover:bg-white",
+                      ].join(" ")}
+                    >
+                      <p
+                        className={[
+                          "text-[0.66rem] font-semibold uppercase tracking-[0.22em]",
+                          hasInstallationDueFilter
+                            ? "text-primary-foreground/80"
+                            : "text-muted-foreground",
+                        ].join(" ")}
+                      >
                         {installationDueLabel}
                       </p>
-                      <p className="mt-2 text-2xl font-semibold text-foreground">
+                      <p
+                        className={[
+                          "mt-2 text-2xl font-semibold",
+                          hasInstallationDueFilter ? "text-primary-foreground" : "text-foreground",
+                        ].join(" ")}
+                      >
                         {kpisQuery.data.installationDueCount}
                       </p>
-                    </div>
+                    </button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" align="start">
                     {installationDueHint}
@@ -396,6 +444,7 @@ function IndexPage(): JSX.Element {
                     setSearchInput("");
                     setSelectedLifecycleFilter(allFilterValue);
                     setSelectedDeviceTypeFilter(allFilterValue);
+                    setSelectedInstallationDueFilter(allFilterValue);
                   }}
                 >
                   Reset
@@ -473,6 +522,10 @@ export const indexRoute = createRoute({
     search: typeof search.search === "string" ? search.search : "",
     lifecycle: typeof search.lifecycle === "string" ? search.lifecycle : allFilterValue,
     deviceType: typeof search.deviceType === "string" ? search.deviceType : allFilterValue,
+    installationDue:
+      search.installationDue === installationDueFilterValue
+        ? installationDueFilterValue
+        : allFilterValue,
   }),
   component: IndexPage,
 });

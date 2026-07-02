@@ -20,6 +20,7 @@ import { publicProcedure, router } from "../trpc.js";
 const deviceBaseFiltersSchema = z.object({
   search: z.string().trim().optional(),
   deviceType: z.string().trim().optional(),
+  installationDue: z.boolean().optional(),
 });
 
 const deviceListFiltersSchema = deviceBaseFiltersSchema
@@ -44,11 +45,12 @@ const updateLocalChangesInputSchema = z.object({
 });
 
 function toDeviceBaseFilters(
-  input: { search?: string; deviceType?: string } | undefined,
+  input: { search?: string; deviceType?: string; installationDue?: boolean } | undefined,
 ): DeviceBaseFilters {
   return {
     search: input?.search ?? "",
     deviceType: input?.deviceType ?? "",
+    installationDue: input?.installationDue ?? false,
   };
 }
 

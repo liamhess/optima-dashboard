@@ -1,4 +1,5 @@
 import type { MergedDevice } from "./merge.js";
+import { isInstallationDue } from "./installation-due.js";
 
 export const lifecycleValues = [
   "Bestellt",
@@ -14,6 +15,7 @@ export const lifecycleValues = [
 export type DeviceBaseFilters = {
   search: string;
   deviceType: string;
+  installationDue: boolean;
 };
 
 export type DeviceListFilters = DeviceBaseFilters & {
@@ -24,6 +26,10 @@ export function matchesDeviceBaseFilters(
   device: MergedDevice,
   filters: DeviceBaseFilters,
 ): boolean {
+  if (filters.installationDue && !isInstallationDue(device.installation.date, new Date())) {
+    return false;
+  }
+
   if (filters.deviceType && device.deviceType !== filters.deviceType) {
     return false;
   }

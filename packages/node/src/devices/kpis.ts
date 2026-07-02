@@ -1,5 +1,6 @@
 import type { MergedDevice } from "./merge.js";
 import { lifecycleValues } from "./filters.js";
+import { isInstallationDue } from "./installation-due.js";
 
 export type DeviceKpis = {
   lifecycleCounts: Array<{
@@ -9,34 +10,6 @@ export type DeviceKpis = {
   installationDueCount: number;
   totalCount: number;
 };
-
-function startOfLocalWeek(value: Date): Date {
-  const start = new Date(value);
-  start.setHours(0, 0, 0, 0);
-
-  const day = start.getDay();
-  const daysSinceMonday = (day + 6) % 7;
-  start.setDate(start.getDate() - daysSinceMonday);
-
-  return start;
-}
-
-function addDays(value: Date, days: number): Date {
-  const next = new Date(value);
-  next.setDate(next.getDate() + days);
-  return next;
-}
-
-function isInstallationDue(installationDate: Date | null, now: Date): boolean {
-  if (!installationDate) {
-    return false;
-  }
-
-  const currentWeekStart = startOfLocalWeek(now);
-  const weekAfterNextStart = addDays(currentWeekStart, 14);
-
-  return installationDate >= currentWeekStart && installationDate < weekAfterNextStart;
-}
 
 export function buildDeviceKpis(devices: MergedDevice[], now = new Date()): DeviceKpis {
   const lifecycleCountsMap = new Map<string, number>(
