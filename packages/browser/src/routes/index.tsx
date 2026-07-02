@@ -42,7 +42,6 @@ import { trpc } from "../trpc.ts";
 const allFilterValue = "all";
 const defaultInstallationDueLabel = "Installationen in den nächsten 14 Tagen";
 const selectedInstallationRangeLabel = "Installationen im ausgewählten Zeitraum";
-const installationDueHint = "Schnellfilter für Installationen ab heute in den nächsten 14 Tagen.";
 
 const onlineIndicatorClassNameByTone: Record<DeviceTableRow["onlineTone"], string> = {
   neutral: "size-2.5 rounded-full bg-muted-foreground/35",
@@ -268,60 +267,51 @@ function DashboardControls(props: DashboardControlsProps): JSX.Element {
               );
             })}
 
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const nextInstallationRange = hasInstallationDuePreset
-                      ? {
-                          installationFrom: undefined,
-                          installationTo: undefined,
-                        }
-                      : getInstallationDuePresetRange();
+            <button
+              type="button"
+              onClick={() => {
+                const nextInstallationRange = hasInstallationDuePreset
+                  ? {
+                      installationFrom: undefined,
+                      installationTo: undefined,
+                    }
+                  : getInstallationDuePresetRange();
 
-                    setSelectedInstallationRange(toDateRange(nextInstallationRange));
-                    props.onFiltersChange(
-                      {
-                        search: searchInput,
-                        lifecycle: selectedLifecycleFilter,
-                        deviceType: selectedDeviceTypeFilter,
-                        ...nextInstallationRange,
-                      },
-                      false,
-                    );
-                  }}
-                  className={[
-                    "rounded-[1.15rem] border px-4 py-3 text-left transition-colors",
-                    hasInstallationDuePreset
-                      ? "border-primary bg-primary text-primary-foreground shadow-[0_10px_30px_rgba(22,166,55,0.2)]"
-                      : "border-border/80 bg-background hover:border-primary/40 hover:bg-white",
-                  ].join(" ")}
-                >
-                  <p
-                    className={[
-                      "text-[0.66rem] font-semibold uppercase tracking-[0.22em]",
-                      hasInstallationDuePreset
-                        ? "text-primary-foreground/80"
-                        : "text-muted-foreground",
-                    ].join(" ")}
-                  >
-                    {installationKpiLabel}
-                  </p>
-                  <p
-                    className={[
-                      "mt-2 text-2xl font-semibold",
-                      hasInstallationDuePreset ? "text-primary-foreground" : "text-foreground",
-                    ].join(" ")}
-                  >
-                    {installationKpiCount ?? 0}
-                  </p>
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" align="start">
-                {installationDueHint}
-              </TooltipContent>
-            </Tooltip>
+                setSelectedInstallationRange(toDateRange(nextInstallationRange));
+                props.onFiltersChange(
+                  {
+                    search: searchInput,
+                    lifecycle: selectedLifecycleFilter,
+                    deviceType: selectedDeviceTypeFilter,
+                    ...nextInstallationRange,
+                  },
+                  false,
+                );
+              }}
+              className={[
+                "rounded-[1.15rem] border px-4 py-3 text-left transition-colors",
+                hasInstallationDuePreset
+                  ? "border-primary bg-primary text-primary-foreground shadow-[0_10px_30px_rgba(22,166,55,0.2)]"
+                  : "border-border/80 bg-background hover:border-primary/40 hover:bg-white",
+              ].join(" ")}
+            >
+              <p
+                className={[
+                  "text-[0.66rem] font-semibold uppercase tracking-[0.22em]",
+                  hasInstallationDuePreset ? "text-primary-foreground/80" : "text-muted-foreground",
+                ].join(" ")}
+              >
+                {installationKpiLabel}
+              </p>
+              <p
+                className={[
+                  "mt-2 text-2xl font-semibold",
+                  hasInstallationDuePreset ? "text-primary-foreground" : "text-foreground",
+                ].join(" ")}
+              >
+                {installationKpiCount ?? 0}
+              </p>
+            </button>
           </div>
         ) : null}
       </div>
