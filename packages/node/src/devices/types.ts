@@ -31,6 +31,7 @@ export type DeviceRecord<TDate> = {
 } & DeviceTimeline<TDate>;
 
 export type EditableDeviceField = "lifecycle" | "serialNumber" | "macAddress" | "notes";
+export type LocalTimestampField = "shippedAt" | "installedAt" | "activatedAt";
 
 export type EditableDeviceBaseField =
   | "baseLifecycle"
@@ -66,6 +67,14 @@ export type EditableDeviceValues = {
   macAddress: string | null;
   notes: string | null;
 };
+
+export const localTimestampFields = [
+  "shippedAt",
+  "installedAt",
+  "activatedAt",
+] as const satisfies ReadonlyArray<LocalTimestampField>;
+
+export type LocalTimestampValues = Record<LocalTimestampField, Date | null>;
 
 export type EditableDeviceConflictValue = {
   isConflicted: boolean;

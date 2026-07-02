@@ -47,6 +47,11 @@ export type DeviceListItem = {
   conflicts: DeviceConflicts;
 };
 
+export type GuidedLifecycleAdvance = {
+  nextLifecycle: string;
+  timestampField: "shippedAt" | "installedAt" | "activatedAt" | null;
+};
+
 export type DeviceTableRow = {
   id: string;
   customerName: string;
@@ -66,6 +71,43 @@ function toDate(value: Date | string | null): Date | null {
   }
 
   return value instanceof Date ? value : new Date(value);
+}
+
+export function toIsoDateTimeString(value: Date | string | null): string | null {
+  const parsedValue = toDate(value);
+  return parsedValue ? parsedValue.toISOString() : null;
+}
+
+export function getGuidedLifecycleAdvance(lifecycle: string): GuidedLifecycleAdvance | null {
+  if (lifecycle === "Bestellt") {
+    return {
+      nextLifecycle: "Verschickt",
+      timestampField: "shippedAt",
+    };
+  }
+
+  if (lifecycle === "Verschickt") {
+    return {
+      nextLifecycle: "Verbaut",
+      timestampField: "installedAt",
+    };
+  }
+
+  if (lifecycle === "Verbaut") {
+    return {
+      nextLifecycle: "Aktiviert",
+      timestampField: "activatedAt",
+    };
+  }
+
+  if (lifecycle === "Aktiviert") {
+    return {
+      nextLifecycle: "Online",
+      timestampField: null,
+    };
+  }
+
+  return null;
 }
 
 export function formatDateLabel(value: Date | string | null, fallback = "Not scheduled"): string {

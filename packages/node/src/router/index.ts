@@ -11,6 +11,9 @@ import {
   editableDeviceFields,
   type EditableDeviceField,
   type EditableDeviceValues,
+  localTimestampFields,
+  type LocalTimestampField,
+  type LocalTimestampValues,
 } from "../devices/types.js";
 import { publicProcedure, router } from "../trpc.js";
 
@@ -32,6 +35,9 @@ const updateLocalChangesInputSchema = z.object({
   serialNumber: z.string(),
   macAddress: z.string(),
   notes: z.string(),
+  shippedAt: z.string().datetime().nullable(),
+  installedAt: z.string().datetime().nullable(),
+  activatedAt: z.string().datetime().nullable(),
 });
 
 function toDeviceBaseFilters(
@@ -58,20 +64,37 @@ function toEditableDeviceValues(
   };
 }
 
+function toLocalTimestampValues(
+  input: z.infer<typeof updateLocalChangesInputSchema>,
+): LocalTimestampValues {
+  return {
+    shippedAt: input.shippedAt ? new Date(input.shippedAt) : null,
+    installedAt: input.installedAt ? new Date(input.installedAt) : null,
+    activatedAt: input.activatedAt ? new Date(input.activatedAt) : null,
+  };
+}
+
 function hasEffectiveLocalChanges(
   device: {
     lifecycle: string;
     serialNumber: string | null;
     macAddress: string | null;
     notes: string | null;
+    shippedAt: Date | null;
+    installedAt: Date | null;
+    activatedAt: Date | null;
   },
   values: EditableDeviceValues,
+  timestamps: LocalTimestampValues,
 ): boolean {
   return (
     values.lifecycle !== device.lifecycle ||
     values.serialNumber !== device.serialNumber ||
     values.macAddress !== device.macAddress ||
-    values.notes !== device.notes
+    values.notes !== device.notes ||
+    timestamps.shippedAt?.getTime() !== device.shippedAt?.getTime() ||
+    timestamps.installedAt?.getTime() !== device.installedAt?.getTime() ||
+    timestamps.activatedAt?.getTime() !== device.activatedAt?.getTime()
   );
 }
 
@@ -81,8 +104,12 @@ function buildPersistedLocalChanges(
     serialNumber: string | null;
     macAddress: string | null;
     notes: string | null;
+    shippedAt: Date | null;
+    installedAt: Date | null;
+    activatedAt: Date | null;
   },
   values: EditableDeviceValues,
+  timestamps: LocalTimestampValues,
 ): {
   hasAnyLocalChanges: boolean;
   persistedValues: PersistedLocalChanges;
@@ -96,6 +123,9 @@ function buildPersistedLocalChanges(
     baseSerialNumber: null,
     baseMacAddress: null,
     baseNotes: null,
+    shippedAt: null,
+    installedAt: null,
+    activatedAt: null,
   };
 
   const persistedValues = editableDeviceFields.reduce<typeof initialPersistedValues>(
@@ -110,9 +140,16 @@ function buildPersistedLocalChanges(
     initialPersistedValues,
   );
 
-  const hasAnyLocalChanges = editableDeviceFields.some(
-    ({ field }) => persistedValues[field as EditableDeviceField] !== null,
-  );
+  for (const field of localTimestampFields) {
+    persistedValues[field] =
+      timestamps[field]?.getTime() === device[field]?.getTime() ? null : timestamps[field];
+  }
+
+  const hasAnyLocalChanges =
+    editableDeviceFields.some(
+      ({ field }) => persistedValues[field as EditableDeviceField] !== null,
+    ) ||
+    localTimestampFields.some((field) => persistedValues[field as LocalTimestampField] !== null);
 
   return {
     hasAnyLocalChanges,
@@ -125,6 +162,9 @@ type PersistedLocalChanges = {
   serialNumber: string | null;
   macAddress: string | null;
   notes: string | null;
+  shippedAt: Date | null;
+  installedAt: Date | null;
+  activatedAt: Date | null;
   baseLifecycle: string | null;
   baseSerialNumber: string | null;
   baseMacAddress: string | null;
@@ -214,9 +254,14 @@ export const appRouter = router({
         });
 
         const values = toEditableDeviceValues(input);
-        const { hasAnyLocalChanges, persistedValues } = buildPersistedLocalChanges(device, values);
+        const timestamps = toLocalTimestampValues(input);
+        const { hasAnyLocalChanges, persistedValues } = buildPersistedLocalChanges(
+          device,
+          values,
+          timestamps,
+        );
 
-        if (!hasAnyLocalChanges || !hasEffectiveLocalChanges(device, values)) {
+        if (!hasAnyLocalChanges || !hasEffectiveLocalChanges(device, values, timestamps)) {
           await prisma.deviceOverlay.deleteMany({
             where: {
               deviceId: device.id,

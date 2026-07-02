@@ -1,7 +1,7 @@
 import { useEffect, useState, type JSX } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
-import { AlertCircleIcon, ArrowUpRightIcon, WifiIcon } from "lucide-react";
+import { AlertCircleIcon, ArrowRightIcon, ArrowUpRightIcon, WifiIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Card, CardContent } from "@/components/ui/card.tsx";
@@ -31,12 +31,15 @@ import {
 } from "@/components/ui/sheet.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Textarea } from "@/components/ui/textarea.tsx";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip.tsx";
 import { cn } from "@/lib/utils.ts";
 import {
   type DeviceConflictValue,
   formatDateLabel,
   formatDateTimeLabel,
+  getGuidedLifecycleAdvance,
   getDeviceOnlineStatus,
+  toIsoDateTimeString,
   type DeviceConflictField,
   type DeviceListItem,
   type DeviceTableRow,
@@ -65,6 +68,9 @@ type DeviceDetailFormValues = {
   serialNumber: string;
   macAddress: string;
   notes: string;
+  shippedAt: string | null;
+  installedAt: string | null;
+  activatedAt: string | null;
 };
 
 type DetailValueProps = {
@@ -83,6 +89,9 @@ function toFormValues(device: DeviceListItem | undefined): DeviceDetailFormValue
     serialNumber: device?.serialNumber ?? "",
     macAddress: device?.macAddress ?? "",
     notes: device?.notes ?? "",
+    shippedAt: toIsoDateTimeString(device?.shippedAt ?? null),
+    installedAt: toIsoDateTimeString(device?.installedAt ?? null),
+    activatedAt: toIsoDateTimeString(device?.activatedAt ?? null),
   };
 }
 
@@ -305,6 +314,11 @@ function DeviceDetailContent(props: { device: DeviceListItem }): JSX.Element {
   const form = useForm<DeviceDetailFormValues>({
     defaultValues: toFormValues(device),
   });
+  const watchedLifecycle = form.watch("lifecycle");
+  const watchedShippedAt = form.watch("shippedAt");
+  const watchedInstalledAt = form.watch("installedAt");
+  const watchedActivatedAt = form.watch("activatedAt");
+  const guidedAdvance = getGuidedLifecycleAdvance(watchedLifecycle);
   const saveLocalChangesMutation = useMutation(
     trpc.devices.updateLocalChanges.mutationOptions({
       onSuccess: async (savedDevice): Promise<void> => {
@@ -340,14 +354,17 @@ function DeviceDetailContent(props: { device: DeviceListItem }): JSX.Element {
       serialNumber: values.serialNumber,
       macAddress: values.macAddress,
       notes: values.notes,
+      shippedAt: values.shippedAt,
+      installedAt: values.installedAt,
+      activatedAt: values.activatedAt,
     });
   }
 
   const timelineItems = [
     { label: "Bestellt", value: formatDateTimeLabel(device.orderedAt, "Noch nicht gesetzt") },
-    { label: "Verschickt", value: formatDateTimeLabel(device.shippedAt, "Noch nicht gesetzt") },
-    { label: "Verbaut", value: formatDateTimeLabel(device.installedAt, "Noch nicht gesetzt") },
-    { label: "Aktiviert", value: formatDateTimeLabel(device.activatedAt, "Noch nicht gesetzt") },
+    { label: "Verschickt", value: formatDateTimeLabel(watchedShippedAt, "Noch nicht gesetzt") },
+    { label: "Verbaut", value: formatDateTimeLabel(watchedInstalledAt, "Noch nicht gesetzt") },
+    { label: "Aktiviert", value: formatDateTimeLabel(watchedActivatedAt, "Noch nicht gesetzt") },
     { label: "Letztes Signal", value: formatDateTimeLabel(device.lastSeenAt, "Noch kein Signal") },
   ];
   const hasPendingConflictResolutions = Object.keys(pendingConflictResolutions).length > 0;
@@ -368,7 +385,7 @@ function DeviceDetailContent(props: { device: DeviceListItem }): JSX.Element {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <StatusPill>{device.lifecycle}</StatusPill>
+              <StatusPill>{watchedLifecycle}</StatusPill>
               <div className="flex items-center gap-1 rounded-md border border-border/70 bg-background px-2 py-0.5 text-xs text-foreground">
                 <span
                   className={onlineIndicatorClassNameByTone[onlineStatus.tone]}
@@ -411,8 +428,54 @@ function DeviceDetailContent(props: { device: DeviceListItem }): JSX.Element {
                 name="lifecycle"
                 render={({ field }) => (
                   <FormItem className="gap-1.5">
-                    <FormLabel>Lifecycle</FormLabel>
-                    <Select value={field.value} onValueChange={field.onChange}>
+                    <div className="flex items-center justify-between gap-3">
+                      <FormLabel>Lifecycle</FormLabel>
+                      {guidedAdvance ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              className="size-8 rounded-md border-border/80 bg-background"
+                              onClick={() => {
+                                setSaveError(null);
+                                field.onChange(guidedAdvance.nextLifecycle);
+
+                                if (guidedAdvance.timestampField) {
+                                  const currentTimestampValue = form.getValues(
+                                    guidedAdvance.timestampField,
+                                  );
+
+                                  if (!currentTimestampValue) {
+                                    form.setValue(
+                                      guidedAdvance.timestampField,
+                                      new Date().toISOString(),
+                                      {
+                                        shouldDirty: true,
+                                      },
+                                    );
+                                  }
+                                }
+                              }}
+                              aria-label={`Weiter zu ${guidedAdvance.nextLifecycle}`}
+                            >
+                              <ArrowRightIcon className="size-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="top">
+                            Weiter zu {guidedAdvance.nextLifecycle}
+                          </TooltipContent>
+                        </Tooltip>
+                      ) : null}
+                    </div>
+                    <Select
+                      value={field.value}
+                      onValueChange={(value) => {
+                        setSaveError(null);
+                        field.onChange(value);
+                      }}
+                    >
                       <FormControl>
                         <SelectTrigger className="h-10 w-full rounded-md border-border/80 bg-background px-3">
                           <SelectValue placeholder="Lifecycle wählen" />
@@ -432,13 +495,20 @@ function DeviceDetailContent(props: { device: DeviceListItem }): JSX.Element {
                       currentValue={field.value}
                       onSelectValue={(value) => {
                         setSaveError(null);
+                        const keepsLocalLifecycle =
+                          value === (device.conflicts.lifecycle.localValue ?? "");
+
                         setPendingConflictResolutions((current) => ({
                           ...current,
-                          lifecycle:
-                            value === (device.conflicts.lifecycle.localValue ?? "")
-                              ? "local"
-                              : "upstream",
+                          lifecycle: keepsLocalLifecycle ? "local" : "upstream",
                         }));
+
+                        if (!keepsLocalLifecycle) {
+                          form.setValue("shippedAt", null, { shouldDirty: true });
+                          form.setValue("installedAt", null, { shouldDirty: true });
+                          form.setValue("activatedAt", null, { shouldDirty: true });
+                        }
+
                         field.onChange(value);
                       }}
                     />

@@ -85,9 +85,9 @@ export function mergeDevice(device: Device, overlay: DeviceOverlay | null): Merg
     trackingUrl: device.trackingUrl,
     notes: overlay?.notes ?? device.notes,
     orderedAt: device.orderedAt,
-    shippedAt: device.shippedAt,
-    installedAt: device.installedAt,
-    activatedAt: device.activatedAt,
+    shippedAt: overlay?.shippedAt ?? device.shippedAt,
+    installedAt: overlay?.installedAt ?? device.installedAt,
+    activatedAt: overlay?.activatedAt ?? device.activatedAt,
     lastSeenAt: device.lastSeenAt,
     lastSyncedAt: device.lastSyncedAt,
     customer: {

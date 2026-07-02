@@ -35,6 +35,9 @@ model DeviceOverlay {
   serialNumber     String?
   macAddress       String?
   notes            String?
+  shippedAt        DateTime?
+  installedAt      DateTime?
+  activatedAt      DateTime?
   baseLifecycle    String?
   baseSerialNumber String?
   baseMacAddress   String?
