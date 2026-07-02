@@ -77,7 +77,7 @@ export function mergeDevice(device: Device, overlay: DeviceOverlay | null): Merg
     },
   );
 
-    conflicts.hasAny = editableDeviceFields.some(({ field }) => conflicts[field].isConflicted);
+  conflicts.hasAny = editableDeviceFields.some(({ field }) => conflicts[field].isConflicted);
 
   return {
     id: device.id,

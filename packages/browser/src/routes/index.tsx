@@ -2,10 +2,13 @@ import { startTransition, useEffect, useMemo, useState, type JSX } from "react";
 import { createRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { functionalUpdate, type ColumnDef, type SortingState } from "@tanstack/react-table";
-import { ArrowRightIcon } from "lucide-react";
+import { CalendarIcon, ArrowRightIcon, XIcon } from "lucide-react";
+import type { DateRange } from "react-day-picker";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Button } from "@/components/ui/button.tsx";
+import { Calendar } from "@/components/ui/calendar.tsx";
 import { Input } from "@/components/ui/input.tsx";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover.tsx";
 import {
   Select,
   SelectContent,
@@ -26,6 +29,7 @@ import {
   type DeviceSortKey,
 } from "@/device-sorting.ts";
 import {
+  formatDateLabel,
   getGuidedLifecycleAdvance,
   toDeviceTableRows,
   type DeviceListItem,
@@ -36,9 +40,9 @@ import { rootRoute } from "./__root.tsx";
 import { trpc } from "../trpc.ts";
 
 const allFilterValue = "all";
-const installationDueFilterValue = "due";
-const installationDueLabel = "Installation steht an";
-const installationDueHint = "Installationen, die diese oder die nächste Woche geplant sind.";
+const defaultInstallationDueLabel = "Installationen in den naechsten 14 Tagen";
+const selectedInstallationRangeLabel = "Installationen im ausgewaehlten Zeitraum";
+const installationDueHint = "Schnellfilter fuer Installationen ab heute in den naechsten 14 Tagen.";
 
 const onlineIndicatorClassNameByTone: Record<DeviceTableRow["onlineTone"], string> = {
   neutral: "size-2.5 rounded-full bg-muted-foreground/35",
@@ -53,10 +57,86 @@ function toQueryFilterValue(value: string): string {
 
 type DashboardFilterValue = {
   deviceType: string;
-  installationDue: string;
+  installationFrom?: string;
+  installationTo?: string;
   lifecycle: string;
   search: string;
 };
+
+function isDateOnlyString(value: unknown): value is string {
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function parseDateOnlyString(value: string): Date | undefined {
+  if (!isDateOnlyString(value)) {
+    return undefined;
+  }
+
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function toDateOnlyString(value: Date): string {
+  const year = value.getFullYear().toString();
+  const month = (value.getMonth() + 1).toString().padStart(2, "0");
+  const day = value.getDate().toString().padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function addDays(value: Date, days: number): Date {
+  const next = new Date(value);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function getInstallationDuePresetRange(
+  now = new Date(),
+): Required<Pick<DashboardFilterValue, "installationFrom" | "installationTo">> {
+  return {
+    installationFrom: toDateOnlyString(now),
+    installationTo: toDateOnlyString(addDays(now, 13)),
+  };
+}
+
+function isInstallationDuePresetActive(
+  filters: Pick<DashboardFilterValue, "installationFrom" | "installationTo">,
+): boolean {
+  const presetRange = getInstallationDuePresetRange();
+
+  return (
+    filters.installationFrom === presetRange.installationFrom &&
+    filters.installationTo === presetRange.installationTo
+  );
+}
+
+function toDateRange(
+  value: Pick<DashboardFilterValue, "installationFrom" | "installationTo">,
+): DateRange | undefined {
+  const from = value.installationFrom ? parseDateOnlyString(value.installationFrom) : undefined;
+  const to = value.installationTo ? parseDateOnlyString(value.installationTo) : undefined;
+
+  if (!from && !to) {
+    return undefined;
+  }
+
+  return {
+    from,
+    to,
+  };
+}
+
+function formatInstallationRangeLabel(dateRange: DateRange | undefined): string {
+  if (!dateRange?.from) {
+    return "Zeitraum waehlen";
+  }
+
+  if (!dateRange.to) {
+    return `${formatDateLabel(dateRange.from)} - ...`;
+  }
+
+  return `${formatDateLabel(dateRange.from)} - ${formatDateLabel(dateRange.to)}`;
+}
 
 type DashboardControlsProps = {
   deviceTypeOptions: string[];
@@ -68,6 +148,7 @@ type DashboardControlsProps = {
           count: number;
           lifecycle: string;
         }>;
+        totalCount: number;
       }
     | undefined;
   kpisError: boolean;
@@ -82,10 +163,20 @@ function DashboardControls(props: DashboardControlsProps): JSX.Element {
   const [selectedDeviceTypeFilter, setSelectedDeviceTypeFilter] = useState(
     props.filters.deviceType,
   );
-  const [selectedInstallationDueFilter, setSelectedInstallationDueFilter] = useState(
-    props.filters.installationDue,
+  const [selectedInstallationRange, setSelectedInstallationRange] = useState<DateRange | undefined>(
+    toDateRange(props.filters),
   );
-  const hasInstallationDueFilter = selectedInstallationDueFilter === installationDueFilterValue;
+  const hasInstallationDuePreset = isInstallationDuePresetActive(props.filters);
+  const hasCustomInstallationRange =
+    Boolean(props.filters.installationFrom && props.filters.installationTo) &&
+    !hasInstallationDuePreset;
+  const installationKpiLabel = hasCustomInstallationRange
+    ? selectedInstallationRangeLabel
+    : defaultInstallationDueLabel;
+  const installationKpiCount =
+    hasCustomInstallationRange && props.kpis
+      ? props.kpis.totalCount
+      : props.kpis?.installationDueCount;
 
   useEffect(() => {
     setSearchInput(props.filters.search);
@@ -100,8 +191,8 @@ function DashboardControls(props: DashboardControlsProps): JSX.Element {
   }, [props.filters.deviceType]);
 
   useEffect(() => {
-    setSelectedInstallationDueFilter(props.filters.installationDue);
-  }, [props.filters.installationDue]);
+    setSelectedInstallationRange(toDateRange(props.filters));
+  }, [props.filters.installationFrom, props.filters.installationTo]);
 
   useEffect(() => {
     if (searchInput === props.filters.search) {
@@ -127,11 +218,11 @@ function DashboardControls(props: DashboardControlsProps): JSX.Element {
     <>
       <div className="border-b border-border/80 bg-[#f7f8f1] px-5 py-4">
         {props.kpisLoading ? (
-          <div className="text-sm text-muted-foreground">Loading fleet summary...</div>
+          <div className="text-sm text-muted-foreground">Flottenuebersicht wird geladen...</div>
         ) : null}
 
         {!props.kpisLoading && props.kpisError ? (
-          <div className="text-sm text-red-700">Could not load fleet summary.</div>
+          <div className="text-sm text-red-700">Flottenuebersicht konnte nicht geladen werden.</div>
         ) : null}
 
         {!props.kpisLoading && !props.kpisError && props.kpis ? (
@@ -151,7 +242,8 @@ function DashboardControls(props: DashboardControlsProps): JSX.Element {
                         search: searchInput,
                         lifecycle: nextLifecycle,
                         deviceType: selectedDeviceTypeFilter,
-                        installationDue: selectedInstallationDueFilter,
+                        installationFrom: props.filters.installationFrom,
+                        installationTo: props.filters.installationTo,
                       },
                       false,
                     );
@@ -181,23 +273,27 @@ function DashboardControls(props: DashboardControlsProps): JSX.Element {
                 <button
                   type="button"
                   onClick={() => {
-                    const nextInstallationDue = hasInstallationDueFilter
-                      ? allFilterValue
-                      : installationDueFilterValue;
-                    setSelectedInstallationDueFilter(nextInstallationDue);
+                    const nextInstallationRange = hasInstallationDuePreset
+                      ? {
+                          installationFrom: undefined,
+                          installationTo: undefined,
+                        }
+                      : getInstallationDuePresetRange();
+
+                    setSelectedInstallationRange(toDateRange(nextInstallationRange));
                     props.onFiltersChange(
                       {
                         search: searchInput,
                         lifecycle: selectedLifecycleFilter,
                         deviceType: selectedDeviceTypeFilter,
-                        installationDue: nextInstallationDue,
+                        ...nextInstallationRange,
                       },
                       false,
                     );
                   }}
                   className={[
                     "rounded-[1.15rem] border px-4 py-3 text-left transition-colors",
-                    hasInstallationDueFilter
+                    hasInstallationDuePreset
                       ? "border-primary bg-primary text-primary-foreground shadow-[0_10px_30px_rgba(22,166,55,0.2)]"
                       : "border-border/80 bg-background hover:border-primary/40 hover:bg-white",
                   ].join(" ")}
@@ -205,20 +301,20 @@ function DashboardControls(props: DashboardControlsProps): JSX.Element {
                   <p
                     className={[
                       "text-[0.66rem] font-semibold uppercase tracking-[0.22em]",
-                      hasInstallationDueFilter
+                      hasInstallationDuePreset
                         ? "text-primary-foreground/80"
                         : "text-muted-foreground",
                     ].join(" ")}
                   >
-                    {installationDueLabel}
+                    {installationKpiLabel}
                   </p>
                   <p
                     className={[
                       "mt-2 text-2xl font-semibold",
-                      hasInstallationDueFilter ? "text-primary-foreground" : "text-foreground",
+                      hasInstallationDuePreset ? "text-primary-foreground" : "text-foreground",
                     ].join(" ")}
                   >
-                    {props.kpis.installationDueCount}
+                    {installationKpiCount ?? 0}
                   </p>
                 </button>
               </TooltipTrigger>
@@ -232,18 +328,18 @@ function DashboardControls(props: DashboardControlsProps): JSX.Element {
 
       <div className="border-b border-border/80 bg-[#fcfcf7] px-5 py-5">
         <div className="flex flex-col gap-4 2xl:flex-row 2xl:items-end 2xl:justify-between">
-          <div className="grid flex-1 gap-4 lg:grid-cols-[minmax(0,1.9fr)_240px_240px]">
+          <div className="grid flex-1 gap-4 lg:grid-cols-[minmax(0,1.65fr)_240px_240px_280px]">
             <label className="space-y-2">
               <span className="block text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-                Search
+                Suche
               </span>
               <Input
                 value={searchInput}
                 onChange={(event) => {
                   setSearchInput(event.target.value);
                 }}
-                placeholder="Customer, serial or MAC"
-                aria-label="Search customer, serial or MAC"
+                placeholder="Kunde, Seriennummer oder MAC"
+                aria-label="Suche nach Kunde, Seriennummer oder MAC"
                 className="h-11 rounded-xl border-border/80 bg-background px-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]"
               />
             </label>
@@ -261,7 +357,8 @@ function DashboardControls(props: DashboardControlsProps): JSX.Element {
                       search: searchInput,
                       lifecycle: value,
                       deviceType: selectedDeviceTypeFilter,
-                      installationDue: selectedInstallationDueFilter,
+                      installationFrom: props.filters.installationFrom,
+                      installationTo: props.filters.installationTo,
                     },
                     false,
                   );
@@ -269,12 +366,12 @@ function DashboardControls(props: DashboardControlsProps): JSX.Element {
               >
                 <SelectTrigger
                   className="h-11 w-full rounded-xl border-border/80 bg-background px-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]"
-                  aria-label="Filter by lifecycle"
+                  aria-label="Nach Lifecycle filtern"
                 >
-                  <SelectValue placeholder="All lifecycles" />
+                  <SelectValue placeholder="Alle Lifecycle-Stufen" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={allFilterValue}>All lifecycles</SelectItem>
+                  <SelectItem value={allFilterValue}>Alle Lifecycle-Stufen</SelectItem>
                   {lifecycleOptions.map((option) => (
                     <SelectItem key={option} value={option}>
                       {option}
@@ -286,7 +383,7 @@ function DashboardControls(props: DashboardControlsProps): JSX.Element {
 
             <label className="space-y-2">
               <span className="block text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-                Device type
+                Geraetetyp
               </span>
               <Select
                 value={selectedDeviceTypeFilter}
@@ -297,7 +394,8 @@ function DashboardControls(props: DashboardControlsProps): JSX.Element {
                       search: searchInput,
                       lifecycle: selectedLifecycleFilter,
                       deviceType: value,
-                      installationDue: selectedInstallationDueFilter,
+                      installationFrom: props.filters.installationFrom,
+                      installationTo: props.filters.installationTo,
                     },
                     false,
                   );
@@ -305,12 +403,12 @@ function DashboardControls(props: DashboardControlsProps): JSX.Element {
               >
                 <SelectTrigger
                   className="h-11 w-full rounded-xl border-border/80 bg-background px-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]"
-                  aria-label="Filter by device type"
+                  aria-label="Nach Geraetetyp filtern"
                 >
-                  <SelectValue placeholder="All device types" />
+                  <SelectValue placeholder="Alle Geraetetypen" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={allFilterValue}>All device types</SelectItem>
+                  <SelectItem value={allFilterValue}>Alle Geraetetypen</SelectItem>
                   {props.deviceTypeOptions.map((option) => (
                     <SelectItem key={option} value={option}>
                       {option}
@@ -319,6 +417,80 @@ function DashboardControls(props: DashboardControlsProps): JSX.Element {
                 </SelectContent>
               </Select>
             </label>
+
+            <div className="space-y-2">
+              <span className="block text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                Installationstermin
+              </span>
+              <div className="relative">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-11 w-full justify-start rounded-xl border-border/80 bg-background px-3.5 pr-11 text-left font-normal shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]"
+                    >
+                      <CalendarIcon className="size-4 text-muted-foreground" />
+                      <span className="truncate">
+                        {formatInstallationRangeLabel(selectedInstallationRange)}
+                      </span>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-3" align="start">
+                    <Calendar
+                      mode="range"
+                      numberOfMonths={2}
+                      defaultMonth={selectedInstallationRange?.from}
+                      selected={selectedInstallationRange}
+                      onSelect={(nextRange) => {
+                        setSelectedInstallationRange(nextRange);
+
+                        if (!nextRange?.from || !nextRange.to) {
+                          return;
+                        }
+
+                        props.onFiltersChange(
+                          {
+                            search: searchInput,
+                            lifecycle: selectedLifecycleFilter,
+                            deviceType: selectedDeviceTypeFilter,
+                            installationFrom: toDateOnlyString(nextRange.from),
+                            installationTo: toDateOnlyString(nextRange.to),
+                          },
+                          false,
+                        );
+                      }}
+                    />
+                  </PopoverContent>
+                </Popover>
+
+                {selectedInstallationRange?.from ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="absolute top-1/2 right-2 -translate-y-1/2 rounded-lg"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setSelectedInstallationRange(undefined);
+                      props.onFiltersChange(
+                        {
+                          search: searchInput,
+                          lifecycle: selectedLifecycleFilter,
+                          deviceType: selectedDeviceTypeFilter,
+                          installationFrom: undefined,
+                          installationTo: undefined,
+                        },
+                        false,
+                      );
+                    }}
+                    aria-label="Installationszeitraum loeschen"
+                  >
+                    <XIcon className="size-4" />
+                  </Button>
+                ) : null}
+              </div>
+            </div>
           </div>
 
           <div className="flex items-center justify-end gap-4 pt-1">
@@ -329,11 +501,11 @@ function DashboardControls(props: DashboardControlsProps): JSX.Element {
                 setSearchInput("");
                 setSelectedLifecycleFilter(allFilterValue);
                 setSelectedDeviceTypeFilter(allFilterValue);
-                setSelectedInstallationDueFilter(allFilterValue);
+                setSelectedInstallationRange(undefined);
                 props.onReset();
               }}
             >
-              Reset
+              Zuruecksetzen
             </Button>
           </div>
         </div>
@@ -345,12 +517,19 @@ function DashboardControls(props: DashboardControlsProps): JSX.Element {
 function IndexPage(): JSX.Element {
   const navigate = useNavigate({ from: indexRoute.id });
   const queryClient = useQueryClient();
-  const { deviceId, deviceType, installationDue, lifecycle, search, sortBy, sortDirection } =
-    indexRoute.useSearch();
+  const {
+    deviceId,
+    deviceType,
+    installationFrom,
+    installationTo,
+    lifecycle,
+    search,
+    sortBy,
+    sortDirection,
+  } = indexRoute.useSearch();
   const trimmedSearch = search.trim();
   const selectedLifecycle = toQueryFilterValue(lifecycle);
   const selectedDeviceType = toQueryFilterValue(deviceType);
-  const hasInstallationDueFilter = installationDue === installationDueFilterValue;
   const sorting = toDeviceSortingState(sortBy, sortDirection);
 
   useEffect(() => {
@@ -379,7 +558,8 @@ function IndexPage(): JSX.Element {
       search: trimmedSearch,
       lifecycle: selectedLifecycle,
       deviceType: selectedDeviceType,
-      installationDue: hasInstallationDueFilter,
+      installationFrom,
+      installationTo,
       sortBy,
       sortDirection,
     }),
@@ -388,7 +568,8 @@ function IndexPage(): JSX.Element {
     trpc.devices.kpis.queryOptions({
       search: trimmedSearch,
       deviceType: selectedDeviceType,
-      installationDue: hasInstallationDueFilter,
+      installationFrom,
+      installationTo,
     }),
   );
   const deviceTypesQuery = useQuery(trpc.devices.deviceTypes.queryOptions());
@@ -422,7 +603,8 @@ function IndexPage(): JSX.Element {
           search: nextFilters.search,
           lifecycle: nextFilters.lifecycle,
           deviceType: nextFilters.deviceType,
-          installationDue: nextFilters.installationDue,
+          installationFrom: nextFilters.installationFrom || undefined,
+          installationTo: nextFilters.installationTo || undefined,
         }),
         replace,
         resetScroll: false,
@@ -455,7 +637,8 @@ function IndexPage(): JSX.Element {
           search: "",
           lifecycle: allFilterValue,
           deviceType: allFilterValue,
-          installationDue: allFilterValue,
+          installationFrom: undefined,
+          installationTo: undefined,
           sortBy: defaultDeviceSortKey,
           sortDirection: defaultDeviceSortDirection,
         }),
@@ -531,7 +714,9 @@ function IndexPage(): JSX.Element {
                       <ArrowRightIcon className="size-3.5" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent side="top">Weiter zu {guidedAdvance.nextLifecycle}</TooltipContent>
+                  <TooltipContent side="top">
+                    Weiter zu {guidedAdvance.nextLifecycle}
+                  </TooltipContent>
                 </Tooltip>
               ) : null}
             </div>
@@ -545,11 +730,11 @@ function IndexPage(): JSX.Element {
         cell: ({ row }) => (
           <div className="space-y-1">
             <p className="font-mono text-xs text-foreground">
-              {row.original.serialNumber ?? "No serial"}
+              {row.original.serialNumber ?? "Keine Seriennummer"}
             </p>
             <div className="flex items-center gap-2">
               <p className="font-mono text-xs text-muted-foreground">
-                {row.original.macAddress ?? "No MAC"}
+                {row.original.macAddress ?? "Keine MAC-Adresse"}
               </p>
               <CopyValueButton
                 copyLabel="MAC-Adresse kopieren"
@@ -598,7 +783,7 @@ function IndexPage(): JSX.Element {
           <div className="flex min-w-0 items-center gap-4">
             <div className="text-4xl leading-none">⚡</div>
             <h1 className="truncate text-base font-semibold text-foreground sm:text-lg">
-              Optima Device Fleet Manager
+              Optima Geraeteflotte
             </h1>
           </div>
 
@@ -612,7 +797,7 @@ function IndexPage(): JSX.Element {
             }}
             className="rounded-full px-5"
           >
-            Refresh
+            Aktualisieren
           </Button>
         </div>
       </header>
@@ -624,7 +809,8 @@ function IndexPage(): JSX.Element {
               search,
               lifecycle,
               deviceType,
-              installationDue,
+              installationFrom,
+              installationTo,
             }}
             deviceTypeOptions={deviceTypeOptions}
             kpis={kpisQuery.data}
@@ -635,13 +821,15 @@ function IndexPage(): JSX.Element {
           />
 
           {devicesQuery.isLoading ? (
-            <div className="px-5 py-16 text-sm text-muted-foreground">Loading device fleet...</div>
+            <div className="px-5 py-16 text-sm text-muted-foreground">
+              Geraeteflotte wird geladen...
+            </div>
           ) : null}
 
           {!devicesQuery.isLoading && devicesQuery.error ? (
             <div className="px-5 py-8">
               <div className="rounded-[1.25rem] border border-red-200 bg-red-50 px-4 py-6 text-sm text-red-700">
-                <p className="font-medium">Could not load devices.</p>
+                <p className="font-medium">Geraete konnten nicht geladen werden.</p>
                 <code className="mt-2 block overflow-x-auto rounded-xl bg-white/80 p-3 font-mono text-xs text-red-700">
                   {devicesQuery.error.message}
                 </code>
@@ -653,7 +841,7 @@ function IndexPage(): JSX.Element {
             <DataTable
               columns={deviceColumns}
               data={deviceRows}
-              emptyMessage="No devices found."
+              emptyMessage="Keine Geraete gefunden."
               onSortingChange={updateSorting}
               sorting={sorting}
               getRowClassName={(row) =>
@@ -707,10 +895,10 @@ export const indexRoute = createRoute({
     search: typeof search.search === "string" ? search.search : "",
     lifecycle: typeof search.lifecycle === "string" ? search.lifecycle : allFilterValue,
     deviceType: typeof search.deviceType === "string" ? search.deviceType : allFilterValue,
-    installationDue:
-      search.installationDue === installationDueFilterValue
-        ? installationDueFilterValue
-        : allFilterValue,
+    installationFrom: isDateOnlyString(search.installationFrom)
+      ? search.installationFrom
+      : undefined,
+    installationTo: isDateOnlyString(search.installationTo) ? search.installationTo : undefined,
     sortBy: isDeviceSortKey(search.sortBy) ? search.sortBy : defaultDeviceSortKey,
     sortDirection: isDeviceSortDirection(search.sortDirection)
       ? search.sortDirection

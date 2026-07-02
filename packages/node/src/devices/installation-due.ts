@@ -1,13 +1,4 @@
-function startOfLocalWeek(value: Date): Date {
-  const start = new Date(value);
-  start.setHours(0, 0, 0, 0);
-
-  const day = start.getDay();
-  const daysSinceMonday = (day + 6) % 7;
-  start.setDate(start.getDate() - daysSinceMonday);
-
-  return start;
-}
+import { toLocalDateKey } from "./installation-date-range.js";
 
 function addDays(value: Date, days: number): Date {
   const next = new Date(value);
@@ -20,8 +11,9 @@ export function isInstallationDue(installationDate: Date | null, now: Date): boo
     return false;
   }
 
-  const currentWeekStart = startOfLocalWeek(now);
-  const weekAfterNextStart = addDays(currentWeekStart, 14);
+  const todayDateKey = toLocalDateKey(now);
+  const latestIncludedDateKey = toLocalDateKey(addDays(now, 13));
+  const installationDateKey = toLocalDateKey(installationDate);
 
-  return installationDate >= currentWeekStart && installationDate < weekAfterNextStart;
+  return installationDateKey >= todayDateKey && installationDateKey <= latestIncludedDateKey;
 }

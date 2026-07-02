@@ -118,7 +118,7 @@ export function getGuidedLifecycleAdvance(lifecycle: string): GuidedLifecycleAdv
   return null;
 }
 
-export function formatDateLabel(value: Date | string | null, fallback = "Not scheduled"): string {
+export function formatDateLabel(value: Date | string | null, fallback = "Nicht geplant"): string {
   const parsedValue = toDate(value);
 
   if (!parsedValue) {

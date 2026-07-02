@@ -50,7 +50,7 @@ export function CopyValueButton(props: CopyValueButtonProps): JSX.Element | null
 
   const tooltipLabel =
     copyState === "copied"
-      ? props.copiedLabel ?? "Kopiert"
+      ? (props.copiedLabel ?? "Kopiert")
       : copyState === "error"
         ? "Kopieren fehlgeschlagen"
         : props.copyLabel;
