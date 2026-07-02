@@ -1,6 +1,6 @@
 import { startTransition, useEffect, useMemo, useState, type JSX } from "react";
 import { createRoute, useNavigate } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { functionalUpdate, type ColumnDef, type SortingState } from "@tanstack/react-table";
 import { CalendarIcon, ArrowRightIcon, XIcon } from "lucide-react";
 import type { DateRange } from "react-day-picker";
@@ -553,8 +553,8 @@ function IndexPage(): JSX.Element {
     });
   }, [navigate, sortBy, sortDirection]);
 
-  const devicesQuery = useQuery(
-    trpc.devices.list.queryOptions({
+  const devicesQuery = useQuery({
+    ...trpc.devices.list.queryOptions({
       search: trimmedSearch,
       lifecycle: selectedLifecycle,
       deviceType: selectedDeviceType,
@@ -563,20 +563,23 @@ function IndexPage(): JSX.Element {
       sortBy,
       sortDirection,
     }),
-  );
-  const kpisQuery = useQuery(
-    trpc.devices.kpis.queryOptions({
+    placeholderData: keepPreviousData,
+  });
+  const kpisQuery = useQuery({
+    ...trpc.devices.kpis.queryOptions({
       search: trimmedSearch,
       deviceType: selectedDeviceType,
       installationFrom,
       installationTo,
     }),
-  );
+    placeholderData: keepPreviousData,
+  });
   const deviceTypesQuery = useQuery(trpc.devices.deviceTypes.queryOptions());
   const selectedDeviceQuery = useQuery({
     ...trpc.devices.byId.queryOptions({ id: deviceId ?? "" }),
     enabled: Boolean(deviceId),
   });
+  const [lastDevicesData, setLastDevicesData] = useState<DeviceListItem[] | undefined>();
   const advanceLifecycleMutation = useMutation(
     trpc.devices.advanceLifecycle.mutationOptions({
       onSuccess: async (): Promise<void> => {
@@ -588,9 +591,17 @@ function IndexPage(): JSX.Element {
       },
     }),
   );
+  const displayedDevices = devicesQuery.data ?? lastDevicesData;
+
+  useEffect(() => {
+    if (devicesQuery.data) {
+      setLastDevicesData(devicesQuery.data);
+    }
+  }, [devicesQuery.data]);
+
   const deviceRows = useMemo(
-    () => (devicesQuery.data ? toDeviceTableRows(devicesQuery.data) : []),
-    [devicesQuery.data],
+    () => (displayedDevices ? toDeviceTableRows(displayedDevices) : []),
+    [displayedDevices],
   );
   const deviceTypeOptions = deviceTypesQuery.data ?? [];
   const selectedDevice = selectedDeviceQuery.data as DeviceListItem | undefined;
@@ -801,19 +812,19 @@ function IndexPage(): JSX.Element {
             }}
             deviceTypeOptions={deviceTypeOptions}
             kpis={kpisQuery.data}
-            kpisLoading={kpisQuery.isLoading}
+            kpisLoading={kpisQuery.isPending && !kpisQuery.data}
             kpisError={Boolean(kpisQuery.error)}
             onFiltersChange={updateFilters}
             onReset={resetFiltersAndSorting}
           />
 
-          {devicesQuery.isLoading ? (
+          {devicesQuery.isPending && !displayedDevices ? (
             <div className="px-5 py-16 text-sm text-muted-foreground">
               Geräteflotte wird geladen...
             </div>
           ) : null}
 
-          {!devicesQuery.isLoading && devicesQuery.error ? (
+          {devicesQuery.error && !displayedDevices ? (
             <div className="px-5 py-8">
               <div className="rounded-[1.25rem] border border-red-200 bg-red-50 px-4 py-6 text-sm text-red-700">
                 <p className="font-medium">Geräte konnten nicht geladen werden.</p>
@@ -824,7 +835,7 @@ function IndexPage(): JSX.Element {
             </div>
           ) : null}
 
-          {!devicesQuery.isLoading && !devicesQuery.error ? (
+          {displayedDevices ? (
             <DataTable
               columns={deviceColumns}
               data={deviceRows}
