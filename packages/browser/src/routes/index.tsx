@@ -1,12 +1,33 @@
+import { useDeferredValue, useState, type JSX } from "react";
 import { createRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Button } from "@/components/ui/button.tsx";
+import { Input } from "@/components/ui/input.tsx";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select.tsx";
 import { DataTable } from "@/components/data-table.tsx";
 import { toDeviceTableRows, type DeviceTableRow } from "@/devices.ts";
 import { rootRoute } from "./__root.tsx";
 import { trpc } from "../trpc.ts";
+
+const allFilterValue = "all";
+const lifecycleOptions = [
+  "Bestellt",
+  "Verschickt",
+  "Verbaut",
+  "Aktiviert",
+  "Online",
+  "Online mit Problem",
+  "Offline",
+  "Storniert",
+] as const;
 
 const deviceColumns: ColumnDef<DeviceTableRow>[] = [
   {
@@ -83,9 +104,26 @@ const onlineIndicatorClassNameByTone: Record<DeviceTableRow["onlineTone"], strin
   danger: "size-2.5 rounded-full bg-red-500",
 };
 
-function IndexPage(): React.JSX.Element {
-  const devicesQuery = useQuery(trpc.devices.list.queryOptions());
+function toQueryFilterValue(value: string): string {
+  return value === allFilterValue ? "" : value;
+}
+
+function IndexPage(): JSX.Element {
+  const [search, setSearch] = useState("");
+  const [lifecycle, setLifecycle] = useState(allFilterValue);
+  const [deviceType, setDeviceType] = useState(allFilterValue);
+  const deferredSearch = useDeferredValue(search);
+
+  const devicesQuery = useQuery(
+    trpc.devices.list.queryOptions({
+      search: deferredSearch.trim(),
+      lifecycle: toQueryFilterValue(lifecycle),
+      deviceType: toQueryFilterValue(deviceType),
+    }),
+  );
+  const deviceTypesQuery = useQuery(trpc.devices.deviceTypes.queryOptions());
   const deviceRows = devicesQuery.data ? toDeviceTableRows(devicesQuery.data) : [];
+  const deviceTypeOptions = deviceTypesQuery.data ?? [];
 
   return (
     <main className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,#fafaf5_100%)]">
@@ -100,7 +138,7 @@ function IndexPage(): React.JSX.Element {
 
           <Button
             onClick={() => {
-              void devicesQuery.refetch();
+              void Promise.all([devicesQuery.refetch(), deviceTypesQuery.refetch()]);
             }}
             className="rounded-full px-5"
           >
@@ -111,12 +149,86 @@ function IndexPage(): React.JSX.Element {
 
       <section className="mx-auto flex w-full max-w-[1680px] flex-col gap-6 px-4 py-5 sm:px-6">
         <section className="overflow-hidden rounded-[1.75rem] border border-border/90 bg-background/96 shadow-[0_24px_80px_rgba(16,31,22,0.06)]">
-          <div className="px-5 py-4">
-            <div>
-              <p className="text-[0.72rem] font-semibold uppercase tracking-[0.26em] text-muted-foreground">
-                Device Registry
-              </p>
-              <h2 className="mt-1 text-xl font-semibold text-foreground">Fleet table</h2>
+          <div className="border-b border-border/80 bg-[#fcfcf7] px-5 py-5">
+            <div className="flex flex-col gap-4 2xl:flex-row 2xl:items-end 2xl:justify-between">
+              <div className="grid flex-1 gap-4 lg:grid-cols-[minmax(0,1.9fr)_240px_240px]">
+                <label className="space-y-2">
+                  <span className="block text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                    Search
+                  </span>
+                  <Input
+                    value={search}
+                    onChange={(event) => {
+                      setSearch(event.target.value);
+                    }}
+                    placeholder="Customer, serial or MAC"
+                    aria-label="Search customer, serial or MAC"
+                    className="h-11 rounded-xl border-border/80 bg-background px-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]"
+                  />
+                </label>
+
+                <label className="space-y-2">
+                  <span className="block text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                    Lifecycle
+                  </span>
+                  <Select value={lifecycle} onValueChange={setLifecycle}>
+                    <SelectTrigger
+                      className="h-11 w-full rounded-xl border-border/80 bg-background px-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]"
+                      aria-label="Filter by lifecycle"
+                    >
+                      <SelectValue placeholder="All lifecycles" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={allFilterValue}>All lifecycles</SelectItem>
+                      {lifecycleOptions.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {option}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </label>
+
+                <label className="space-y-2">
+                  <span className="block text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                    Device type
+                  </span>
+                  <Select value={deviceType} onValueChange={setDeviceType}>
+                    <SelectTrigger
+                      className="h-11 w-full rounded-xl border-border/80 bg-background px-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]"
+                      aria-label="Filter by device type"
+                    >
+                      <SelectValue placeholder="All device types" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={allFilterValue}>All device types</SelectItem>
+                      {deviceTypeOptions.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {option}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-between gap-4 pt-1 2xl:justify-end">
+                <p className="text-sm font-medium text-muted-foreground">
+                  {devicesQuery.data ? `${devicesQuery.data.length} devices` : "Filtering fleet"}
+                </p>
+
+                <Button
+                  variant="outline"
+                  className="h-11 rounded-xl border-border/80 bg-background px-4"
+                  onClick={() => {
+                    setSearch("");
+                    setLifecycle(allFilterValue);
+                    setDeviceType(allFilterValue);
+                  }}
+                >
+                  Reset
+                </Button>
+              </div>
             </div>
           </div>
 

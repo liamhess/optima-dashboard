@@ -1,7 +1,7 @@
 import type { Device, DeviceOverlay } from "@prisma/client";
 import type { DeviceRecord, EditableDeviceConflictState, EditableDeviceField } from "./types.js";
 
-type MergedDevice = DeviceRecord<Date | null> & {
+export type MergedDevice = DeviceRecord<Date | null> & {
   lastSyncedAt: Date;
   overlay: {
     updatedAt: Date;
