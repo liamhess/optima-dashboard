@@ -134,7 +134,7 @@ export function formatDateLabel(value: Date | string | null, fallback = "Nicht g
 
 export function formatDateTimeLabel(
   value: Date | string | null,
-  fallback = "Nicht verfuegbar",
+  fallback = "Nicht verfügbar",
 ): string {
   const parsedValue = toDate(value);
 

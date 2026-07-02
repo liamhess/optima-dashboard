@@ -105,7 +105,7 @@ export function DataTable<TData>(props: DataTableProps<TData>): React.JSX.Elemen
                 colSpan={props.columns.length || 1}
                 className="h-28 px-4 text-center text-sm text-muted-foreground"
               >
-                {props.emptyMessage ?? "No results."}
+                {props.emptyMessage ?? "Keine Ergebnisse."}
               </TableCell>
             </TableRow>
           )}

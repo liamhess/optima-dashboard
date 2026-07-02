@@ -40,9 +40,9 @@ import { rootRoute } from "./__root.tsx";
 import { trpc } from "../trpc.ts";
 
 const allFilterValue = "all";
-const defaultInstallationDueLabel = "Installationen in den naechsten 14 Tagen";
-const selectedInstallationRangeLabel = "Installationen im ausgewaehlten Zeitraum";
-const installationDueHint = "Schnellfilter fuer Installationen ab heute in den naechsten 14 Tagen.";
+const defaultInstallationDueLabel = "Installationen in den nächsten 14 Tagen";
+const selectedInstallationRangeLabel = "Installationen im ausgewählten Zeitraum";
+const installationDueHint = "Schnellfilter für Installationen ab heute in den nächsten 14 Tagen.";
 
 const onlineIndicatorClassNameByTone: Record<DeviceTableRow["onlineTone"], string> = {
   neutral: "size-2.5 rounded-full bg-muted-foreground/35",
@@ -128,7 +128,7 @@ function toDateRange(
 
 function formatInstallationRangeLabel(dateRange: DateRange | undefined): string {
   if (!dateRange?.from) {
-    return "Zeitraum waehlen";
+    return "Zeitraum wählen";
   }
 
   if (!dateRange.to) {
@@ -218,11 +218,11 @@ function DashboardControls(props: DashboardControlsProps): JSX.Element {
     <>
       <div className="border-b border-border/80 bg-[#f7f8f1] px-5 py-4">
         {props.kpisLoading ? (
-          <div className="text-sm text-muted-foreground">Flottenuebersicht wird geladen...</div>
+          <div className="text-sm text-muted-foreground">Flottenübersicht wird geladen...</div>
         ) : null}
 
         {!props.kpisLoading && props.kpisError ? (
-          <div className="text-sm text-red-700">Flottenuebersicht konnte nicht geladen werden.</div>
+          <div className="text-sm text-red-700">Flottenübersicht konnte nicht geladen werden.</div>
         ) : null}
 
         {!props.kpisLoading && !props.kpisError && props.kpis ? (
@@ -383,7 +383,7 @@ function DashboardControls(props: DashboardControlsProps): JSX.Element {
 
             <label className="space-y-2">
               <span className="block text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-                Geraetetyp
+                Gerätetyp
               </span>
               <Select
                 value={selectedDeviceTypeFilter}
@@ -403,12 +403,12 @@ function DashboardControls(props: DashboardControlsProps): JSX.Element {
               >
                 <SelectTrigger
                   className="h-11 w-full rounded-xl border-border/80 bg-background px-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]"
-                  aria-label="Nach Geraetetyp filtern"
+                  aria-label="Nach Gerätetyp filtern"
                 >
-                  <SelectValue placeholder="Alle Geraetetypen" />
+                  <SelectValue placeholder="Alle Gerätetypen" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={allFilterValue}>Alle Geraetetypen</SelectItem>
+                  <SelectItem value={allFilterValue}>Alle Gerätetypen</SelectItem>
                   {props.deviceTypeOptions.map((option) => (
                     <SelectItem key={option} value={option}>
                       {option}
@@ -484,7 +484,7 @@ function DashboardControls(props: DashboardControlsProps): JSX.Element {
                         false,
                       );
                     }}
-                    aria-label="Installationszeitraum loeschen"
+                    aria-label="Installationszeitraum löschen"
                   >
                     <XIcon className="size-4" />
                   </Button>
@@ -505,7 +505,7 @@ function DashboardControls(props: DashboardControlsProps): JSX.Element {
                 props.onReset();
               }}
             >
-              Zuruecksetzen
+              Zurücksetzen
             </Button>
           </div>
         </div>
@@ -783,7 +783,7 @@ function IndexPage(): JSX.Element {
           <div className="flex min-w-0 items-center gap-4">
             <div className="text-4xl leading-none">⚡</div>
             <h1 className="truncate text-base font-semibold text-foreground sm:text-lg">
-              Optima Geraeteflotte
+              Optima Geräteflotte
             </h1>
           </div>
 
@@ -822,14 +822,14 @@ function IndexPage(): JSX.Element {
 
           {devicesQuery.isLoading ? (
             <div className="px-5 py-16 text-sm text-muted-foreground">
-              Geraeteflotte wird geladen...
+              Geräteflotte wird geladen...
             </div>
           ) : null}
 
           {!devicesQuery.isLoading && devicesQuery.error ? (
             <div className="px-5 py-8">
               <div className="rounded-[1.25rem] border border-red-200 bg-red-50 px-4 py-6 text-sm text-red-700">
-                <p className="font-medium">Geraete konnten nicht geladen werden.</p>
+                <p className="font-medium">Geräte konnten nicht geladen werden.</p>
                 <code className="mt-2 block overflow-x-auto rounded-xl bg-white/80 p-3 font-mono text-xs text-red-700">
                   {devicesQuery.error.message}
                 </code>
@@ -841,7 +841,7 @@ function IndexPage(): JSX.Element {
             <DataTable
               columns={deviceColumns}
               data={deviceRows}
-              emptyMessage="Keine Geraete gefunden."
+              emptyMessage="Keine Geräte gefunden."
               onSortingChange={updateSorting}
               sorting={sorting}
               getRowClassName={(row) =>
