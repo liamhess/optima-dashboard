@@ -1,4 +1,4 @@
-import { useEffect, useState, type JSX } from "react";
+import { useEffect, useState, type JSX, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { AlertCircleIcon, ArrowRightIcon, ArrowUpRightIcon, WifiIcon } from "lucide-react";
@@ -32,6 +32,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Textarea } from "@/components/ui/textarea.tsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip.tsx";
+import { CopyValueButton } from "@/components/copy-value-button.tsx";
 import { cn } from "@/lib/utils.ts";
 import {
   type DeviceConflictValue,
@@ -74,6 +75,7 @@ type DeviceDetailFormValues = {
 };
 
 type DetailValueProps = {
+  action?: ReactNode;
   label: string;
   value: string;
 };
@@ -115,13 +117,16 @@ function StatusPill(props: {
   );
 }
 
-function DetailValue({ label, value }: DetailValueProps): JSX.Element {
+function DetailValue({ action, label, value }: DetailValueProps): JSX.Element {
   return (
     <div className="space-y-0.5">
       <p className="text-[0.68rem] font-medium uppercase tracking-[0.18em] text-muted-foreground">
         {label}
       </p>
-      <p className="text-sm leading-5 text-foreground">{value}</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="min-w-0 break-all text-sm leading-5 text-foreground">{value}</p>
+        {action ? <div className="shrink-0">{action}</div> : null}
+      </div>
     </div>
   );
 }
@@ -141,7 +146,7 @@ function DetailGrid(props: { values: DetailValueProps[] }): JSX.Element {
   return (
     <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
       {props.values.map((item) => (
-        <DetailValue key={item.label} label={item.label} value={item.value} />
+        <DetailValue key={item.label} action={item.action} label={item.label} value={item.value} />
       ))}
     </div>
   );
@@ -664,6 +669,13 @@ function DeviceDetailContent(props: { device: DeviceListItem }): JSX.Element {
               {
                 label: "E-Mail",
                 value: emptyValue(device.customer.email, "Keine E-Mail hinterlegt"),
+                action: (
+                  <CopyValueButton
+                    copyLabel="E-Mail kopieren"
+                    copiedLabel="E-Mail kopiert"
+                    value={device.customer.email}
+                  />
+                ),
               },
               {
                 label: "Bundesland",
@@ -702,6 +714,13 @@ function DeviceDetailContent(props: { device: DeviceListItem }): JSX.Element {
               {
                 label: "Aktuelle MAC-Adresse",
                 value: emptyValue(device.macAddress, "Keine MAC-Adresse"),
+                action: (
+                  <CopyValueButton
+                    copyLabel="MAC-Adresse kopieren"
+                    copiedLabel="MAC-Adresse kopiert"
+                    value={device.macAddress}
+                  />
+                ),
               },
               {
                 label: "Heizma ID",

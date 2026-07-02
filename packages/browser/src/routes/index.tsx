@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select.tsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip.tsx";
+import { CopyValueButton } from "@/components/copy-value-button.tsx";
 import { DeviceDetailSheet } from "@/components/device-detail-sheet.tsx";
 import { DataTable } from "@/components/data-table.tsx";
 import {
@@ -537,9 +538,19 @@ function IndexPage(): JSX.Element {
           <p className="font-mono text-xs text-foreground">
             {row.original.serialNumber ?? "No serial"}
           </p>
-          <p className="font-mono text-xs text-muted-foreground">
-            {row.original.macAddress ?? "No MAC"}
-          </p>
+          <div className="flex items-center gap-2">
+            <p className="font-mono text-xs text-muted-foreground">
+              {row.original.macAddress ?? "No MAC"}
+            </p>
+            <CopyValueButton
+              copyLabel="MAC-Adresse kopieren"
+              copiedLabel="MAC-Adresse kopiert"
+              value={row.original.macAddress}
+              onClick={(event) => {
+                event.stopPropagation();
+              }}
+            />
+          </div>
         </div>
       ),
     },
