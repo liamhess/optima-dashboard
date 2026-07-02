@@ -1,5 +1,5 @@
 import { createRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import {
@@ -12,47 +12,16 @@ import {
 import { rootRoute } from "./__root.tsx";
 import { apiBaseUrl, trpc } from "../trpc.ts";
 
-type HealthResponse = Awaited<ReturnType<typeof trpc.health.query>>;
-type ConfigResponse = Awaited<ReturnType<typeof trpc.config.query>>;
+type StatusCardProps = {
+  label: string;
+  value: string;
+};
 
-async function loadBackendState(): Promise<{
-  config: ConfigResponse;
-  health: HealthResponse;
-}> {
-  const [health, config] = await Promise.all([trpc.health.query(), trpc.config.query()]);
-
-  return {
-    config,
-    health,
-  };
-}
-
-function IndexPage() {
-  const [health, setHealth] = useState<HealthResponse | null>(null);
-  const [config, setConfig] = useState<ConfigResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  async function checkBackend() {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const payload = await loadBackendState();
-      setHealth(payload.health);
-      setConfig(payload.config);
-    } catch (caughtError) {
-      setHealth(null);
-      setConfig(null);
-      setError(caughtError instanceof Error ? caughtError.message : "Unknown backend error");
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    void checkBackend();
-  }, []);
+function IndexPage(): React.JSX.Element {
+  const healthQuery = useQuery(trpc.health.queryOptions());
+  const configQuery = useQuery(trpc.config.queryOptions());
+  const isLoading = healthQuery.isLoading || configQuery.isLoading;
+  const error = healthQuery.error ?? configQuery.error;
 
   return (
     <main className="min-h-screen px-4 py-10 sm:px-6">
@@ -72,7 +41,12 @@ function IndexPage() {
               </p>
             </div>
 
-            <Button onClick={() => void checkBackend()} className="rounded-full px-5">
+            <Button
+              onClick={() => {
+                void Promise.all([healthQuery.refetch(), configQuery.refetch()]);
+              }}
+              className="rounded-full px-5"
+            >
               Retry check
             </Button>
           </div>
@@ -106,25 +80,25 @@ function IndexPage() {
               <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-4 text-sm text-red-700">
                 <p className="font-medium">Connection failed.</p>
                 <code className="mt-2 block overflow-x-auto rounded-xl bg-white/80 p-3 font-mono text-xs text-red-700">
-                  {error}
+                  {error.message}
                 </code>
               </div>
             </CardContent>
           ) : null}
 
-          {!isLoading && health ? (
+          {!isLoading && healthQuery.data && configQuery.data ? (
             <CardContent className="grid gap-3 pt-0 sm:grid-cols-2 xl:grid-cols-3">
               <StatusCard label="API base URL" value={apiBaseUrl} />
               <StatusCard label="tRPC endpoint" value={`${apiBaseUrl}/trpc`} />
-              <StatusCard label="Healthy" value={String(health.ok)} />
-              <StatusCard label="Timestamp" value={health.timestamp} />
+              <StatusCard label="Healthy" value={String(healthQuery.data.ok)} />
+              <StatusCard label="Timestamp" value={healthQuery.data.timestamp} />
               <StatusCard
                 label="API URL configured"
-                value={String(config?.hasApiBaseUrl ?? false)}
+                value={String(configQuery.data.hasApiBaseUrl)}
               />
               <StatusCard
                 label="API token configured"
-                value={String(config?.hasApiToken ?? false)}
+                value={String(configQuery.data.hasApiToken)}
               />
             </CardContent>
           ) : null}
@@ -134,7 +108,7 @@ function IndexPage() {
   );
 }
 
-function StatusCard(props: { label: string; value: string }) {
+function StatusCard(props: StatusCardProps): React.JSX.Element {
   return (
     <Card className="rounded-2xl border-border bg-background shadow-none">
       <CardHeader className="gap-1 pb-2">

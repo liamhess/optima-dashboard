@@ -6,14 +6,16 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -p tsconfig.json && vite build",
-    "format": "oxfmt --write .",
-    "format:check": "oxfmt --check .",
+    "format": "oxfmt --ignore-path ../../.gitignore --write .",
+    "format:check": "oxfmt --ignore-path ../../.gitignore --check .",
     "preview": "vite preview"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.2.9",
+    "@tanstack/react-query": "^5.90.2",
     "@tanstack/react-router": "^1.133.13",
     "@trpc/client": "^11.18.0",
+    "@trpc/tanstack-react-query": "^11.18.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.22.0",
