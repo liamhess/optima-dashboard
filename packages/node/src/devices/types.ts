@@ -9,6 +9,12 @@ export type DeviceInstallation<TDate> = {
   date: TDate;
 };
 
+export type DeviceOnlineStatus = {
+  key: "waiting" | "online" | "offline";
+  label: string;
+  tone: "neutral" | "positive" | "warning" | "danger";
+};
+
 export type DeviceTimeline<TDate> = {
   orderedAt: TDate;
   shippedAt: TDate;

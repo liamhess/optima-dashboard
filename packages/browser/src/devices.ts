@@ -9,6 +9,12 @@ type DeviceInstallation = {
   date: Date | string | null;
 };
 
+type DeviceOnlineStatus = {
+  key: "waiting" | "online" | "offline";
+  label: string;
+  tone: "neutral" | "positive" | "warning" | "danger";
+};
+
 export type DeviceConflictValue = {
   isConflicted: boolean;
   localValue: string | null;
@@ -39,6 +45,7 @@ export type DeviceListItem = {
   activatedAt: Date | string | null;
   lastSeenAt: Date | string | null;
   lastSyncedAt: Date | string;
+  onlineStatus: DeviceOnlineStatus;
   customer: DeviceCustomer;
   installation: DeviceInstallation;
   overlay: {
@@ -62,7 +69,7 @@ export type DeviceTableRow = {
   macAddress: string | null;
   installationDateLabel: string;
   onlineLabel: string;
-  onlineTone: "neutral" | "positive" | "warning" | "danger";
+  onlineTone: DeviceOnlineStatus["tone"];
 };
 
 function toDate(value: Date | string | null): Date | null {
@@ -144,98 +151,19 @@ export function formatDateTimeLabel(
   }).format(parsedValue);
 }
 
-function formatRelativeDays(days: number): string {
-  if (days <= 0) {
-    return "today";
-  }
-
-  if (days === 1) {
-    return "1 day ago";
-  }
-
-  return `${days} days ago`;
-}
-
-export function getDeviceOnlineStatus(device: DeviceListItem): {
-  label: string;
-  tone: DeviceTableRow["onlineTone"];
-} {
-  if (device.lifecycle === "Online mit Problem") {
-    return {
-      label: "Problem reported",
-      tone: "warning",
-    };
-  }
-
-  if (device.lifecycle === "Offline") {
-    return {
-      label: "Offline",
-      tone: "danger",
-    };
-  }
-
-  const lastSeenAt = toDate(device.lastSeenAt);
-
-  if (lastSeenAt) {
-    const now = Date.now();
-    const diffInMs = now - lastSeenAt.getTime();
-    const diffInDays = Math.max(0, Math.floor(diffInMs / (1000 * 60 * 60 * 24)));
-
-    return {
-      label: diffInDays === 0 ? "Online now" : `Seen ${formatRelativeDays(diffInDays)}`,
-      tone: diffInDays <= 1 ? "positive" : "warning",
-    };
-  }
-
-  if (device.lifecycle === "Aktiviert") {
-    return {
-      label: "Awaiting first signal",
-      tone: "warning",
-    };
-  }
-
-  if (device.lifecycle === "Verbaut" || device.lifecycle === "Verschickt") {
-    return {
-      label: "Waiting for install",
-      tone: "neutral",
-    };
-  }
-
-  if (device.lifecycle === "Bestellt") {
-    return {
-      label: "Not shipped yet",
-      tone: "neutral",
-    };
-  }
-
-  if (device.lifecycle === "Storniert") {
-    return {
-      label: "Cancelled",
-      tone: "danger",
-    };
-  }
-
-  return {
-    label: "Unknown",
-    tone: "neutral",
-  };
-}
-
 export function toDeviceTableRows(devices: DeviceListItem[]): DeviceTableRow[] {
   return devices.map((device) => {
-    const onlineStatus = getDeviceOnlineStatus(device);
-
     return {
       id: device.id,
-      customerName: device.customer.name ?? "Unknown customer",
-      customerState: device.customer.state ?? "Unknown",
+      customerName: device.customer.name ?? "Unbekannter Kunde",
+      customerState: device.customer.state ?? "Unbekannt",
       deviceType: device.deviceType,
       lifecycle: device.lifecycle,
       serialNumber: device.serialNumber,
       macAddress: device.macAddress,
       installationDateLabel: formatDateLabel(device.installation.date),
-      onlineLabel: onlineStatus.label,
-      onlineTone: onlineStatus.tone,
+      onlineLabel: device.onlineStatus.label,
+      onlineTone: device.onlineStatus.tone,
     };
   });
 }

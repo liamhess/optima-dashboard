@@ -39,7 +39,6 @@ import {
   formatDateLabel,
   formatDateTimeLabel,
   getGuidedLifecycleAdvance,
-  getDeviceOnlineStatus,
   toIsoDateTimeString,
   type DeviceConflictField,
   type DeviceListItem,
@@ -309,7 +308,6 @@ function ErrorState(props: { error: { message: string }; onRetry: () => void }):
 
 function DeviceDetailContent(props: { device: DeviceListItem }): JSX.Element {
   const { device } = props;
-  const onlineStatus = getDeviceOnlineStatus(device);
   const queryClient = useQueryClient();
   const [saveError, setSaveError] = useState<string | null>(null);
   const [pendingConflictResolutions, setPendingConflictResolutions] = useState<
@@ -403,10 +401,10 @@ function DeviceDetailContent(props: { device: DeviceListItem }): JSX.Element {
               <StatusPill>{watchedLifecycle}</StatusPill>
               <div className="flex items-center gap-1 rounded-md border border-border/70 bg-background px-2 py-0.5 text-xs text-foreground">
                 <span
-                  className={onlineIndicatorClassNameByTone[onlineStatus.tone]}
+                  className={onlineIndicatorClassNameByTone[device.onlineStatus.tone]}
                   aria-hidden="true"
                 />
-                {onlineStatus.label}
+                {device.onlineStatus.label}
               </div>
             </div>
           </div>

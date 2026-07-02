@@ -1,14 +1,17 @@
 import type { Device, DeviceOverlay } from "@prisma/client";
+import { getDeviceOnlineStatus } from "./online-status.js";
 import { editableDeviceFields } from "./types.js";
 import type {
   DeviceRecord,
   EditableDeviceConflictState,
   EditableDeviceConflictValue,
   EditableDeviceField,
+  DeviceOnlineStatus,
 } from "./types.js";
 
 export type MergedDevice = DeviceRecord<Date | null> & {
   lastSyncedAt: Date;
+  onlineStatus: DeviceOnlineStatus;
   overlay: {
     updatedAt: Date;
   } | null;
@@ -74,7 +77,7 @@ export function mergeDevice(device: Device, overlay: DeviceOverlay | null): Merg
     },
   );
 
-  conflicts.hasAny = editableDeviceFields.some(({ field }) => conflicts[field].isConflicted);
+    conflicts.hasAny = editableDeviceFields.some(({ field }) => conflicts[field].isConflicted);
 
   return {
     id: device.id,
@@ -90,6 +93,7 @@ export function mergeDevice(device: Device, overlay: DeviceOverlay | null): Merg
     activatedAt: overlay?.activatedAt ?? device.activatedAt,
     lastSeenAt: device.lastSeenAt,
     lastSyncedAt: device.lastSyncedAt,
+    onlineStatus: getDeviceOnlineStatus(device.lastSeenAt),
     customer: {
       name: device.customerName,
       email: device.customerEmail,
