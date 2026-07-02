@@ -1,4 +1,12 @@
-import { flexRender, getCoreRowModel, useReactTable, type ColumnDef } from "@tanstack/react-table";
+import {
+  flexRender,
+  getCoreRowModel,
+  useReactTable,
+  type ColumnDef,
+  type OnChangeFn,
+  type SortingState,
+} from "@tanstack/react-table";
+import { ArrowDownIcon, ArrowUpDownIcon, ArrowUpIcon } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -15,6 +23,8 @@ type DataTableProps<TData> = {
   emptyMessage?: string;
   getRowClassName?: (row: TData) => string | undefined;
   onRowClick?: (row: TData) => void;
+  onSortingChange?: OnChangeFn<SortingState>;
+  sorting?: SortingState;
 };
 
 export function DataTable<TData>(props: DataTableProps<TData>): React.JSX.Element {
@@ -22,6 +32,13 @@ export function DataTable<TData>(props: DataTableProps<TData>): React.JSX.Elemen
     columns: props.columns,
     data: props.data,
     getCoreRowModel: getCoreRowModel(),
+    manualSorting: true,
+    enableMultiSort: false,
+    enableSortingRemoval: false,
+    onSortingChange: props.onSortingChange,
+    state: {
+      sorting: props.sorting ?? [],
+    },
   });
 
   return (
@@ -35,9 +52,26 @@ export function DataTable<TData>(props: DataTableProps<TData>): React.JSX.Elemen
                   key={header.id}
                   className="h-11 px-4 text-[0.68rem] font-semibold uppercase tracking-[0.22em] text-muted-foreground"
                 >
-                  {header.isPlaceholder
-                    ? null
-                    : flexRender(header.column.columnDef.header, header.getContext())}
+                  {header.isPlaceholder ? null : header.column.getCanSort() ? (
+                    <button
+                      type="button"
+                      className="flex items-center gap-2 text-left transition-colors hover:text-foreground"
+                      onClick={header.column.getToggleSortingHandler()}
+                    >
+                      <span>{flexRender(header.column.columnDef.header, header.getContext())}</span>
+                      {header.column.getIsSorted() === "asc" ? (
+                        <ArrowUpIcon className="size-3.5" aria-hidden="true" />
+                      ) : null}
+                      {header.column.getIsSorted() === "desc" ? (
+                        <ArrowDownIcon className="size-3.5" aria-hidden="true" />
+                      ) : null}
+                      {header.column.getIsSorted() === false ? (
+                        <ArrowUpDownIcon className="size-3.5 opacity-50" aria-hidden="true" />
+                      ) : null}
+                    </button>
+                  ) : (
+                    flexRender(header.column.columnDef.header, header.getContext())
+                  )}
                 </TableHead>
               ))}
             </TableRow>

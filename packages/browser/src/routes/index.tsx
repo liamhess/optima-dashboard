@@ -1,7 +1,7 @@
 import { startTransition, useEffect, useState, type JSX } from "react";
 import { createRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ColumnDef } from "@tanstack/react-table";
+import { functionalUpdate, type ColumnDef, type SortingState } from "@tanstack/react-table";
 import { ArrowRightIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Button } from "@/components/ui/button.tsx";
@@ -16,6 +16,14 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip.tsx";
 import { DeviceDetailSheet } from "@/components/device-detail-sheet.tsx";
 import { DataTable } from "@/components/data-table.tsx";
+import {
+  defaultDeviceSortDirection,
+  defaultDeviceSortKey,
+  isDeviceSortDirection,
+  isDeviceSortKey,
+  toDeviceSortingState,
+  type DeviceSortKey,
+} from "@/device-sorting.ts";
 import {
   getGuidedLifecycleAdvance,
   toDeviceTableRows,
@@ -64,6 +72,7 @@ type DashboardControlsProps = {
   kpisError: boolean;
   kpisLoading: boolean;
   onFiltersChange: (nextFilters: DashboardFilterValue, replace: boolean) => void;
+  onReset: () => void;
 };
 
 function DashboardControls(props: DashboardControlsProps): JSX.Element {
@@ -320,15 +329,7 @@ function DashboardControls(props: DashboardControlsProps): JSX.Element {
                 setSelectedLifecycleFilter(allFilterValue);
                 setSelectedDeviceTypeFilter(allFilterValue);
                 setSelectedInstallationDueFilter(allFilterValue);
-                props.onFiltersChange(
-                  {
-                    search: "",
-                    lifecycle: allFilterValue,
-                    deviceType: allFilterValue,
-                    installationDue: allFilterValue,
-                  },
-                  false,
-                );
+                props.onReset();
               }}
             >
               Reset
@@ -343,11 +344,34 @@ function DashboardControls(props: DashboardControlsProps): JSX.Element {
 function IndexPage(): JSX.Element {
   const navigate = useNavigate({ from: indexRoute.id });
   const queryClient = useQueryClient();
-  const { deviceId, deviceType, installationDue, lifecycle, search } = indexRoute.useSearch();
+  const { deviceId, deviceType, installationDue, lifecycle, search, sortBy, sortDirection } =
+    indexRoute.useSearch();
   const trimmedSearch = search.trim();
   const selectedLifecycle = toQueryFilterValue(lifecycle);
   const selectedDeviceType = toQueryFilterValue(deviceType);
   const hasInstallationDueFilter = installationDue === installationDueFilterValue;
+  const sorting = toDeviceSortingState(sortBy, sortDirection);
+
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const hasExplicitSortBy = searchParams.has("sortBy");
+    const hasExplicitSortDirection = searchParams.has("sortDirection");
+
+    if (hasExplicitSortBy && hasExplicitSortDirection) {
+      return;
+    }
+
+    startTransition(() => {
+      void navigate({
+        search: (previous) => ({
+          ...previous,
+          sortBy: defaultDeviceSortKey,
+          sortDirection: defaultDeviceSortDirection,
+        }),
+        replace: true,
+      });
+    });
+  }, [navigate, sortBy, sortDirection]);
 
   const devicesQuery = useQuery(
     trpc.devices.list.queryOptions({
@@ -355,6 +379,8 @@ function IndexPage(): JSX.Element {
       lifecycle: selectedLifecycle,
       deviceType: selectedDeviceType,
       installationDue: hasInstallationDueFilter,
+      sortBy,
+      sortDirection,
     }),
   );
   const kpisQuery = useQuery(
@@ -399,28 +425,69 @@ function IndexPage(): JSX.Element {
     });
   }
 
+  function updateSorting(updater: SortingState | ((old: SortingState) => SortingState)): void {
+    const nextSorting = functionalUpdate(updater, sorting);
+    const [nextSort] = nextSorting;
+
+    startTransition(() => {
+      void navigate({
+        search: (previous) => ({
+          ...previous,
+          sortBy: nextSort?.id as DeviceSortKey | undefined,
+          sortDirection: nextSort?.desc ? "desc" : nextSort ? "asc" : undefined,
+        }),
+        replace: false,
+      });
+    });
+  }
+
+  function resetFiltersAndSorting(): void {
+    startTransition(() => {
+      void navigate({
+        search: (previous) => ({
+          ...previous,
+          search: "",
+          lifecycle: allFilterValue,
+          deviceType: allFilterValue,
+          installationDue: allFilterValue,
+          sortBy: defaultDeviceSortKey,
+          sortDirection: defaultDeviceSortDirection,
+        }),
+        replace: false,
+      });
+    });
+  }
+
   const deviceColumns: ColumnDef<DeviceTableRow>[] = [
     {
+      id: "customerName",
       accessorKey: "customerName",
+      enableSorting: true,
       header: "Kunde",
       cell: ({ row }) => <p className="font-medium text-foreground">{row.original.customerName}</p>,
     },
     {
+      id: "customerState",
       accessorKey: "customerState",
+      enableSorting: true,
       header: "Ort",
       cell: ({ row }) => (
         <span className="text-sm text-muted-foreground">{row.original.customerState}</span>
       ),
     },
     {
+      id: "deviceType",
       accessorKey: "deviceType",
+      enableSorting: true,
       header: "Gerätetyp",
       cell: ({ row }) => (
         <span className="font-medium text-foreground">{row.original.deviceType}</span>
       ),
     },
     {
+      id: "lifecycle",
       accessorKey: "lifecycle",
+      enableSorting: true,
       header: "Lifecycle",
       cell: ({ row }) => {
         const guidedAdvance = getGuidedLifecycleAdvance(row.original.lifecycle);
@@ -463,6 +530,7 @@ function IndexPage(): JSX.Element {
     },
     {
       id: "identifier",
+      enableSorting: false,
       header: "Serial / MAC",
       cell: ({ row }) => (
         <div className="space-y-1">
@@ -476,14 +544,18 @@ function IndexPage(): JSX.Element {
       ),
     },
     {
+      id: "installationDate",
       accessorKey: "installationDateLabel",
+      enableSorting: true,
       header: "Installation",
       cell: ({ row }) => (
         <span className="text-sm text-foreground">{row.original.installationDateLabel}</span>
       ),
     },
     {
+      id: "onlineLabel",
       accessorKey: "onlineLabel",
+      enableSorting: false,
       header: "Online",
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
@@ -537,6 +609,7 @@ function IndexPage(): JSX.Element {
             kpisLoading={kpisQuery.isLoading}
             kpisError={Boolean(kpisQuery.error)}
             onFiltersChange={updateFilters}
+            onReset={resetFiltersAndSorting}
           />
 
           {devicesQuery.isLoading ? (
@@ -559,6 +632,8 @@ function IndexPage(): JSX.Element {
               columns={deviceColumns}
               data={deviceRows}
               emptyMessage="No devices found."
+              onSortingChange={updateSorting}
+              sorting={sorting}
               getRowClassName={(row) =>
                 row.id === deviceId
                   ? "bg-primary/[0.065] shadow-[inset_0_0_0_1px_rgba(22,166,55,0.18)]"
@@ -612,6 +687,10 @@ export const indexRoute = createRoute({
       search.installationDue === installationDueFilterValue
         ? installationDueFilterValue
         : allFilterValue,
+    sortBy: isDeviceSortKey(search.sortBy) ? search.sortBy : defaultDeviceSortKey,
+    sortDirection: isDeviceSortDirection(search.sortDirection)
+      ? search.sortDirection
+      : defaultDeviceSortDirection,
   }),
   component: IndexPage,
 });

@@ -7,6 +7,7 @@ import {
   type DeviceBaseFilters,
 } from "../devices/filters.js";
 import { mergeDevice } from "../devices/merge.js";
+import { deviceSortKeys, sortDevices } from "../devices/sorting.js";
 import {
   editableDeviceFields,
   type EditableDeviceField,
@@ -26,6 +27,8 @@ const deviceBaseFiltersSchema = z.object({
 const deviceListFiltersSchema = deviceBaseFiltersSchema
   .extend({
     lifecycle: z.string().trim().optional(),
+    sortBy: z.enum(deviceSortKeys).optional(),
+    sortDirection: z.enum(["asc", "desc"]).optional(),
   })
   .optional();
 
@@ -282,9 +285,14 @@ export const appRouter = router({
         },
       });
 
-      return devices
+      const filteredDevices = devices
         .map((device) => mergeDevice(device, device.overlay))
         .filter((device) => matchesDeviceListFilters(device, filters));
+
+      return sortDevices(filteredDevices, {
+        sortBy: input?.sortBy,
+        direction: input?.sortDirection,
+      });
     }),
     kpis: publicProcedure.input(deviceBaseFiltersInputSchema).query(async ({ input }) => {
       const filters = toDeviceBaseFilters(input);
