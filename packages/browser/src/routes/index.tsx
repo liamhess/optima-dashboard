@@ -365,6 +365,7 @@ function DashboardControls(props: DashboardControlsProps): JSX.Element {
                 }}
               >
                 <SelectTrigger
+                  size="lg"
                   className="h-11 w-full rounded-xl border-border/80 bg-background px-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]"
                   aria-label="Nach Lifecycle filtern"
                 >
@@ -402,6 +403,7 @@ function DashboardControls(props: DashboardControlsProps): JSX.Element {
                 }}
               >
                 <SelectTrigger
+                  size="lg"
                   className="h-11 w-full rounded-xl border-border/80 bg-background px-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]"
                   aria-label="Nach Gerätetyp filtern"
                 >
