@@ -9,9 +9,11 @@
     "build:browser": "pnpm --filter browser build",
     "dev:node": "pnpm --filter @optima/node dev",
     "build:node": "pnpm --filter @optima/node build",
+    "prisma:generate": "pnpm --filter @optima/node prisma:generate",
     "format": "pnpm -r format",
     "format:check": "pnpm -r format:check",
     "precommit": "pnpm format && pnpm build",
+    "postinstall": "pnpm prisma:generate",
     "prepare": "husky"
   },
   "devDependencies": {
