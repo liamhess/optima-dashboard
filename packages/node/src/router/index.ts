@@ -220,7 +220,11 @@ async function persistLocalChanges(
   values: EditableDeviceValues,
   timestamps: LocalTimestampValues,
 ) {
-  const { hasAnyLocalChanges, persistedValues } = buildLocalChangePersistence(device, values, timestamps);
+  const { hasAnyLocalChanges, persistedValues } = buildLocalChangePersistence(
+    device,
+    values,
+    timestamps,
+  );
 
   if (!hasAnyLocalChanges) {
     await prisma.deviceOverlay.deleteMany({

@@ -1,7 +1,8 @@
 import { useDeferredValue, useState, type JSX } from "react";
 import { createRoute, useNavigate } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
+import { ArrowRightIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
@@ -15,7 +16,12 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip.tsx";
 import { DeviceDetailSheet } from "@/components/device-detail-sheet.tsx";
 import { DataTable } from "@/components/data-table.tsx";
-import { toDeviceTableRows, type DeviceListItem, type DeviceTableRow } from "@/devices.ts";
+import {
+  getGuidedLifecycleAdvance,
+  toDeviceTableRows,
+  type DeviceListItem,
+  type DeviceTableRow,
+} from "@/devices.ts";
 import { lifecycleOptions } from "@/lifecycles.ts";
 import { rootRoute } from "./__root.tsx";
 import { trpc } from "../trpc.ts";
@@ -23,74 +29,6 @@ import { trpc } from "../trpc.ts";
 const allFilterValue = "all";
 const installationDueLabel = "Installation steht an";
 const installationDueHint = "Installationen, die diese oder die nächste Woche geplant sind.";
-
-const deviceColumns: ColumnDef<DeviceTableRow>[] = [
-  {
-    accessorKey: "customerName",
-    header: "Kunde",
-    cell: ({ row }) => <p className="font-medium text-foreground">{row.original.customerName}</p>,
-  },
-  {
-    accessorKey: "customerState",
-    header: "Ort",
-    cell: ({ row }) => (
-      <span className="text-sm text-muted-foreground">{row.original.customerState}</span>
-    ),
-  },
-  {
-    accessorKey: "deviceType",
-    header: "Gerätetyp",
-    cell: ({ row }) => (
-      <span className="font-medium text-foreground">{row.original.deviceType}</span>
-    ),
-  },
-  {
-    accessorKey: "lifecycle",
-    header: "Lifecycle",
-    cell: ({ row }) => (
-      <Badge
-        variant="secondary"
-        className="rounded-full border border-border/60 bg-secondary px-3 py-1 text-foreground"
-      >
-        {row.original.lifecycle}
-      </Badge>
-    ),
-  },
-  {
-    id: "identifier",
-    header: "Serial / MAC",
-    cell: ({ row }) => (
-      <div className="space-y-1">
-        <p className="font-mono text-xs text-foreground">
-          {row.original.serialNumber ?? "No serial"}
-        </p>
-        <p className="font-mono text-xs text-muted-foreground">
-          {row.original.macAddress ?? "No MAC"}
-        </p>
-      </div>
-    ),
-  },
-  {
-    accessorKey: "installationDateLabel",
-    header: "Installation",
-    cell: ({ row }) => (
-      <span className="text-sm text-foreground">{row.original.installationDateLabel}</span>
-    ),
-  },
-  {
-    accessorKey: "onlineLabel",
-    header: "Online",
-    cell: ({ row }) => (
-      <div className="flex items-center gap-2">
-        <span
-          className={onlineIndicatorClassNameByTone[row.original.onlineTone]}
-          aria-hidden="true"
-        />
-        <span className="font-medium text-foreground">{row.original.onlineLabel}</span>
-      </div>
-    ),
-  },
-];
 
 const onlineIndicatorClassNameByTone: Record<DeviceTableRow["onlineTone"], string> = {
   neutral: "size-2.5 rounded-full bg-muted-foreground/35",
@@ -105,6 +43,7 @@ function toQueryFilterValue(value: string): string {
 
 function IndexPage(): JSX.Element {
   const navigate = useNavigate({ from: indexRoute.id });
+  const queryClient = useQueryClient();
   const { deviceId } = indexRoute.useSearch();
   const [search, setSearch] = useState("");
   const [lifecycle, setLifecycle] = useState(allFilterValue);
@@ -132,9 +71,117 @@ function IndexPage(): JSX.Element {
     ...trpc.devices.byId.queryOptions({ id: deviceId ?? "" }),
     enabled: Boolean(deviceId),
   });
+  const advanceLifecycleMutation = useMutation(
+    trpc.devices.advanceLifecycle.mutationOptions({
+      onSuccess: async (): Promise<void> => {
+        await Promise.all([
+          queryClient.invalidateQueries(trpc.devices.byId.pathFilter()),
+          queryClient.invalidateQueries(trpc.devices.list.pathFilter()),
+          queryClient.invalidateQueries(trpc.devices.kpis.pathFilter()),
+        ]);
+      },
+    }),
+  );
   const deviceRows = devicesQuery.data ? toDeviceTableRows(devicesQuery.data) : [];
   const deviceTypeOptions = deviceTypesQuery.data ?? [];
   const selectedDevice = selectedDeviceQuery.data as DeviceListItem | undefined;
+  const deviceColumns: ColumnDef<DeviceTableRow>[] = [
+    {
+      accessorKey: "customerName",
+      header: "Kunde",
+      cell: ({ row }) => <p className="font-medium text-foreground">{row.original.customerName}</p>,
+    },
+    {
+      accessorKey: "customerState",
+      header: "Ort",
+      cell: ({ row }) => (
+        <span className="text-sm text-muted-foreground">{row.original.customerState}</span>
+      ),
+    },
+    {
+      accessorKey: "deviceType",
+      header: "Gerätetyp",
+      cell: ({ row }) => (
+        <span className="font-medium text-foreground">{row.original.deviceType}</span>
+      ),
+    },
+    {
+      accessorKey: "lifecycle",
+      header: "Lifecycle",
+      cell: ({ row }) => {
+        const guidedAdvance = getGuidedLifecycleAdvance(row.original.lifecycle);
+        const isPending =
+          advanceLifecycleMutation.isPending &&
+          advanceLifecycleMutation.variables?.id === row.original.id;
+
+        return (
+          <div className="flex items-center gap-2">
+            <Badge
+              variant="secondary"
+              className="rounded-full border border-border/60 bg-secondary px-3 py-1 text-foreground"
+            >
+              {row.original.lifecycle}
+            </Badge>
+            {guidedAdvance ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="size-7 rounded-full border-border/80 bg-background"
+                    disabled={isPending}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void advanceLifecycleMutation.mutateAsync({ id: row.original.id });
+                    }}
+                    aria-label={`Weiter zu ${guidedAdvance.nextLifecycle}`}
+                  >
+                    <ArrowRightIcon className="size-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">Weiter zu {guidedAdvance.nextLifecycle}</TooltipContent>
+              </Tooltip>
+            ) : null}
+          </div>
+        );
+      },
+    },
+    {
+      id: "identifier",
+      header: "Serial / MAC",
+      cell: ({ row }) => (
+        <div className="space-y-1">
+          <p className="font-mono text-xs text-foreground">
+            {row.original.serialNumber ?? "No serial"}
+          </p>
+          <p className="font-mono text-xs text-muted-foreground">
+            {row.original.macAddress ?? "No MAC"}
+          </p>
+        </div>
+      ),
+    },
+    {
+      accessorKey: "installationDateLabel",
+      header: "Installation",
+      cell: ({ row }) => (
+        <span className="text-sm text-foreground">{row.original.installationDateLabel}</span>
+      ),
+    },
+    {
+      accessorKey: "onlineLabel",
+      header: "Online",
+      cell: ({ row }) => (
+        <div className="flex items-center gap-2">
+          <span
+            className={onlineIndicatorClassNameByTone[row.original.onlineTone]}
+            aria-hidden="true"
+          />
+          <span className="font-medium text-foreground">{row.original.onlineLabel}</span>
+        </div>
+      ),
+    },
+  ];
 
   return (
     <main className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,#fafaf5_100%)]">
