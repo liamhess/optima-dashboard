@@ -1,4 +1,4 @@
-import { startTransition, useDeferredValue, useEffect, useState, type JSX } from "react";
+import { startTransition, useEffect, useState, type JSX } from "react";
 import { createRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
@@ -42,81 +42,312 @@ function toQueryFilterValue(value: string): string {
   return value === allFilterValue ? "" : value;
 }
 
-function IndexPage(): JSX.Element {
-  const navigate = useNavigate({ from: indexRoute.id });
-  const queryClient = useQueryClient();
-  const { deviceId, deviceType, installationDue, lifecycle, search } = indexRoute.useSearch();
-  const [searchInput, setSearchInput] = useState(search);
-  const [selectedLifecycleFilter, setSelectedLifecycleFilter] = useState(lifecycle);
-  const [selectedDeviceTypeFilter, setSelectedDeviceTypeFilter] = useState(deviceType);
-  const [selectedInstallationDueFilter, setSelectedInstallationDueFilter] =
-    useState(installationDue);
-  const deferredSearch = useDeferredValue(searchInput);
-  const trimmedSearch = deferredSearch.trim();
-  const selectedLifecycle = toQueryFilterValue(selectedLifecycleFilter);
-  const selectedDeviceType = toQueryFilterValue(selectedDeviceTypeFilter);
+type DashboardFilterValue = {
+  deviceType: string;
+  installationDue: string;
+  lifecycle: string;
+  search: string;
+};
+
+type DashboardControlsProps = {
+  deviceTypeOptions: string[];
+  filters: DashboardFilterValue;
+  kpis:
+    | {
+        installationDueCount: number;
+        lifecycleCounts: Array<{
+          count: number;
+          lifecycle: string;
+        }>;
+      }
+    | undefined;
+  kpisError: boolean;
+  kpisLoading: boolean;
+  onFiltersChange: (nextFilters: DashboardFilterValue, replace: boolean) => void;
+};
+
+function DashboardControls(props: DashboardControlsProps): JSX.Element {
+  const [searchInput, setSearchInput] = useState(props.filters.search);
+  const [selectedLifecycleFilter, setSelectedLifecycleFilter] = useState(props.filters.lifecycle);
+  const [selectedDeviceTypeFilter, setSelectedDeviceTypeFilter] = useState(
+    props.filters.deviceType,
+  );
+  const [selectedInstallationDueFilter, setSelectedInstallationDueFilter] = useState(
+    props.filters.installationDue,
+  );
   const hasInstallationDueFilter = selectedInstallationDueFilter === installationDueFilterValue;
 
   useEffect(() => {
-    setSearchInput(search);
-  }, [search]);
+    setSearchInput(props.filters.search);
+  }, [props.filters.search]);
 
   useEffect(() => {
-    setSelectedLifecycleFilter(lifecycle);
-  }, [lifecycle]);
+    setSelectedLifecycleFilter(props.filters.lifecycle);
+  }, [props.filters.lifecycle]);
 
   useEffect(() => {
-    setSelectedDeviceTypeFilter(deviceType);
-  }, [deviceType]);
+    setSelectedDeviceTypeFilter(props.filters.deviceType);
+  }, [props.filters.deviceType]);
 
   useEffect(() => {
-    setSelectedInstallationDueFilter(installationDue);
-  }, [installationDue]);
+    setSelectedInstallationDueFilter(props.filters.installationDue);
+  }, [props.filters.installationDue]);
 
   useEffect(() => {
-    const normalizedSearch = searchInput;
-    const normalizedLifecycle = selectedLifecycleFilter;
-    const normalizedDeviceType = selectedDeviceTypeFilter;
-    const normalizedInstallationDue = selectedInstallationDueFilter;
-
-    if (
-      normalizedSearch === search &&
-      normalizedLifecycle === lifecycle &&
-      normalizedDeviceType === deviceType &&
-      normalizedInstallationDue === installationDue
-    ) {
+    if (searchInput === props.filters.search) {
       return;
     }
 
     const timeoutId = window.setTimeout(() => {
-      startTransition(() => {
-        void navigate({
-          search: (previous) => ({
-            ...previous,
-            search: normalizedSearch,
-            lifecycle: normalizedLifecycle,
-            deviceType: normalizedDeviceType,
-            installationDue: normalizedInstallationDue,
-          }),
-          replace: true,
-        });
-      });
+      props.onFiltersChange(
+        {
+          ...props.filters,
+          search: searchInput,
+        },
+        true,
+      );
     }, 180);
 
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [
-    installationDue,
-    deviceType,
-    lifecycle,
-    navigate,
-    search,
-    searchInput,
-    selectedDeviceTypeFilter,
-    selectedInstallationDueFilter,
-    selectedLifecycleFilter,
-  ]);
+  }, [props, searchInput]);
+
+  return (
+    <>
+      <div className="border-b border-border/80 bg-[#f7f8f1] px-5 py-4">
+        {props.kpisLoading ? (
+          <div className="text-sm text-muted-foreground">Loading fleet summary...</div>
+        ) : null}
+
+        {!props.kpisLoading && props.kpisError ? (
+          <div className="text-sm text-red-700">Could not load fleet summary.</div>
+        ) : null}
+
+        {!props.kpisLoading && !props.kpisError && props.kpis ? (
+          <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-9">
+            {props.kpis.lifecycleCounts.map((item) => {
+              const isActive = selectedLifecycleFilter === item.lifecycle;
+
+              return (
+                <button
+                  key={item.lifecycle}
+                  type="button"
+                  onClick={() => {
+                    const nextLifecycle = isActive ? allFilterValue : item.lifecycle;
+                    setSelectedLifecycleFilter(nextLifecycle);
+                    props.onFiltersChange(
+                      {
+                        search: searchInput,
+                        lifecycle: nextLifecycle,
+                        deviceType: selectedDeviceTypeFilter,
+                        installationDue: selectedInstallationDueFilter,
+                      },
+                      false,
+                    );
+                  }}
+                  className={[
+                    "group rounded-[1.15rem] border px-4 py-3 text-left transition-colors",
+                    isActive
+                      ? "border-primary bg-primary text-primary-foreground shadow-[0_10px_30px_rgba(22,166,55,0.2)]"
+                      : "border-border/80 bg-background hover:border-primary/40 hover:bg-white",
+                  ].join(" ")}
+                >
+                  <p
+                    className={[
+                      "text-[0.66rem] font-semibold uppercase tracking-[0.22em]",
+                      isActive ? "text-primary-foreground/80" : "text-muted-foreground",
+                    ].join(" ")}
+                  >
+                    {item.lifecycle}
+                  </p>
+                  <p className="mt-2 text-2xl font-semibold">{item.count}</p>
+                </button>
+              );
+            })}
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextInstallationDue = hasInstallationDueFilter
+                      ? allFilterValue
+                      : installationDueFilterValue;
+                    setSelectedInstallationDueFilter(nextInstallationDue);
+                    props.onFiltersChange(
+                      {
+                        search: searchInput,
+                        lifecycle: selectedLifecycleFilter,
+                        deviceType: selectedDeviceTypeFilter,
+                        installationDue: nextInstallationDue,
+                      },
+                      false,
+                    );
+                  }}
+                  className={[
+                    "rounded-[1.15rem] border px-4 py-3 text-left transition-colors",
+                    hasInstallationDueFilter
+                      ? "border-primary bg-primary text-primary-foreground shadow-[0_10px_30px_rgba(22,166,55,0.2)]"
+                      : "border-border/80 bg-background hover:border-primary/40 hover:bg-white",
+                  ].join(" ")}
+                >
+                  <p
+                    className={[
+                      "text-[0.66rem] font-semibold uppercase tracking-[0.22em]",
+                      hasInstallationDueFilter
+                        ? "text-primary-foreground/80"
+                        : "text-muted-foreground",
+                    ].join(" ")}
+                  >
+                    {installationDueLabel}
+                  </p>
+                  <p
+                    className={[
+                      "mt-2 text-2xl font-semibold",
+                      hasInstallationDueFilter ? "text-primary-foreground" : "text-foreground",
+                    ].join(" ")}
+                  >
+                    {props.kpis.installationDueCount}
+                  </p>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" align="start">
+                {installationDueHint}
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="border-b border-border/80 bg-[#fcfcf7] px-5 py-5">
+        <div className="flex flex-col gap-4 2xl:flex-row 2xl:items-end 2xl:justify-between">
+          <div className="grid flex-1 gap-4 lg:grid-cols-[minmax(0,1.9fr)_240px_240px]">
+            <label className="space-y-2">
+              <span className="block text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                Search
+              </span>
+              <Input
+                value={searchInput}
+                onChange={(event) => {
+                  setSearchInput(event.target.value);
+                }}
+                placeholder="Customer, serial or MAC"
+                aria-label="Search customer, serial or MAC"
+                className="h-11 rounded-xl border-border/80 bg-background px-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]"
+              />
+            </label>
+
+            <label className="space-y-2">
+              <span className="block text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                Lifecycle
+              </span>
+              <Select
+                value={selectedLifecycleFilter}
+                onValueChange={(value) => {
+                  setSelectedLifecycleFilter(value);
+                  props.onFiltersChange(
+                    {
+                      search: searchInput,
+                      lifecycle: value,
+                      deviceType: selectedDeviceTypeFilter,
+                      installationDue: selectedInstallationDueFilter,
+                    },
+                    false,
+                  );
+                }}
+              >
+                <SelectTrigger
+                  className="h-11 w-full rounded-xl border-border/80 bg-background px-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]"
+                  aria-label="Filter by lifecycle"
+                >
+                  <SelectValue placeholder="All lifecycles" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={allFilterValue}>All lifecycles</SelectItem>
+                  {lifecycleOptions.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {option}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </label>
+
+            <label className="space-y-2">
+              <span className="block text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                Device type
+              </span>
+              <Select
+                value={selectedDeviceTypeFilter}
+                onValueChange={(value) => {
+                  setSelectedDeviceTypeFilter(value);
+                  props.onFiltersChange(
+                    {
+                      search: searchInput,
+                      lifecycle: selectedLifecycleFilter,
+                      deviceType: value,
+                      installationDue: selectedInstallationDueFilter,
+                    },
+                    false,
+                  );
+                }}
+              >
+                <SelectTrigger
+                  className="h-11 w-full rounded-xl border-border/80 bg-background px-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]"
+                  aria-label="Filter by device type"
+                >
+                  <SelectValue placeholder="All device types" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={allFilterValue}>All device types</SelectItem>
+                  {props.deviceTypeOptions.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {option}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </label>
+          </div>
+
+          <div className="flex items-center justify-end gap-4 pt-1">
+            <Button
+              variant="outline"
+              className="h-11 rounded-xl border-border/80 bg-background px-4"
+              onClick={() => {
+                setSearchInput("");
+                setSelectedLifecycleFilter(allFilterValue);
+                setSelectedDeviceTypeFilter(allFilterValue);
+                setSelectedInstallationDueFilter(allFilterValue);
+                props.onFiltersChange(
+                  {
+                    search: "",
+                    lifecycle: allFilterValue,
+                    deviceType: allFilterValue,
+                    installationDue: allFilterValue,
+                  },
+                  false,
+                );
+              }}
+            >
+              Reset
+            </Button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function IndexPage(): JSX.Element {
+  const navigate = useNavigate({ from: indexRoute.id });
+  const queryClient = useQueryClient();
+  const { deviceId, deviceType, installationDue, lifecycle, search } = indexRoute.useSearch();
+  const trimmedSearch = search.trim();
+  const selectedLifecycle = toQueryFilterValue(lifecycle);
+  const selectedDeviceType = toQueryFilterValue(deviceType);
+  const hasInstallationDueFilter = installationDue === installationDueFilterValue;
 
   const devicesQuery = useQuery(
     trpc.devices.list.queryOptions({
@@ -152,6 +383,22 @@ function IndexPage(): JSX.Element {
   const deviceRows = devicesQuery.data ? toDeviceTableRows(devicesQuery.data) : [];
   const deviceTypeOptions = deviceTypesQuery.data ?? [];
   const selectedDevice = selectedDeviceQuery.data as DeviceListItem | undefined;
+
+  function updateFilters(nextFilters: DashboardFilterValue, replace: boolean): void {
+    startTransition(() => {
+      void navigate({
+        search: (previous) => ({
+          ...previous,
+          search: nextFilters.search,
+          lifecycle: nextFilters.lifecycle,
+          deviceType: nextFilters.deviceType,
+          installationDue: nextFilters.installationDue,
+        }),
+        replace,
+      });
+    });
+  }
+
   const deviceColumns: ColumnDef<DeviceTableRow>[] = [
     {
       accessorKey: "customerName",
@@ -278,180 +525,19 @@ function IndexPage(): JSX.Element {
 
       <section className="mx-auto flex w-full max-w-[1680px] flex-col gap-6 px-4 py-5 sm:px-6">
         <section className="overflow-hidden rounded-[1.75rem] border border-border/90 bg-background/96 shadow-[0_24px_80px_rgba(16,31,22,0.06)]">
-          <div className="border-b border-border/80 bg-[#f7f8f1] px-5 py-4">
-            {kpisQuery.isLoading ? (
-              <div className="text-sm text-muted-foreground">Loading fleet summary...</div>
-            ) : null}
-
-            {!kpisQuery.isLoading && kpisQuery.error ? (
-              <div className="text-sm text-red-700">Could not load fleet summary.</div>
-            ) : null}
-
-            {!kpisQuery.isLoading && !kpisQuery.error && kpisQuery.data ? (
-              <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-9">
-                {kpisQuery.data.lifecycleCounts.map((item) => {
-                  const isActive = selectedLifecycle === item.lifecycle;
-
-                  return (
-                    <button
-                      key={item.lifecycle}
-                      type="button"
-                      onClick={() => {
-                        setSelectedLifecycleFilter(isActive ? allFilterValue : item.lifecycle);
-                      }}
-                      className={[
-                        "group rounded-[1.15rem] border px-4 py-3 text-left transition-colors",
-                        isActive
-                          ? "border-primary bg-primary text-primary-foreground shadow-[0_10px_30px_rgba(22,166,55,0.2)]"
-                          : "border-border/80 bg-background hover:border-primary/40 hover:bg-white",
-                      ].join(" ")}
-                    >
-                      <p
-                        className={[
-                          "text-[0.66rem] font-semibold uppercase tracking-[0.22em]",
-                          isActive ? "text-primary-foreground/80" : "text-muted-foreground",
-                        ].join(" ")}
-                      >
-                        {item.lifecycle}
-                      </p>
-                      <p className="mt-2 text-2xl font-semibold">{item.count}</p>
-                    </button>
-                  );
-                })}
-
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedInstallationDueFilter(
-                          hasInstallationDueFilter ? allFilterValue : installationDueFilterValue,
-                        );
-                      }}
-                      className={[
-                        "rounded-[1.15rem] border px-4 py-3 text-left transition-colors",
-                        hasInstallationDueFilter
-                          ? "border-primary bg-primary text-primary-foreground shadow-[0_10px_30px_rgba(22,166,55,0.2)]"
-                          : "border-border/80 bg-background hover:border-primary/40 hover:bg-white",
-                      ].join(" ")}
-                    >
-                      <p
-                        className={[
-                          "text-[0.66rem] font-semibold uppercase tracking-[0.22em]",
-                          hasInstallationDueFilter
-                            ? "text-primary-foreground/80"
-                            : "text-muted-foreground",
-                        ].join(" ")}
-                      >
-                        {installationDueLabel}
-                      </p>
-                      <p
-                        className={[
-                          "mt-2 text-2xl font-semibold",
-                          hasInstallationDueFilter ? "text-primary-foreground" : "text-foreground",
-                        ].join(" ")}
-                      >
-                        {kpisQuery.data.installationDueCount}
-                      </p>
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" align="start">
-                    {installationDueHint}
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-            ) : null}
-          </div>
-
-          <div className="border-b border-border/80 bg-[#fcfcf7] px-5 py-5">
-            <div className="flex flex-col gap-4 2xl:flex-row 2xl:items-end 2xl:justify-between">
-              <div className="grid flex-1 gap-4 lg:grid-cols-[minmax(0,1.9fr)_240px_240px]">
-                <label className="space-y-2">
-                  <span className="block text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-                    Search
-                  </span>
-                  <Input
-                    value={searchInput}
-                    onChange={(event) => {
-                      setSearchInput(event.target.value);
-                    }}
-                    placeholder="Customer, serial or MAC"
-                    aria-label="Search customer, serial or MAC"
-                    className="h-11 rounded-xl border-border/80 bg-background px-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]"
-                  />
-                </label>
-
-                <label className="space-y-2">
-                  <span className="block text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-                    Lifecycle
-                  </span>
-                  <Select
-                    value={selectedLifecycleFilter}
-                    onValueChange={(value) => {
-                      setSelectedLifecycleFilter(value);
-                    }}
-                  >
-                    <SelectTrigger
-                      className="h-11 w-full rounded-xl border-border/80 bg-background px-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]"
-                      aria-label="Filter by lifecycle"
-                    >
-                      <SelectValue placeholder="All lifecycles" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={allFilterValue}>All lifecycles</SelectItem>
-                      {lifecycleOptions.map((option) => (
-                        <SelectItem key={option} value={option}>
-                          {option}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </label>
-
-                <label className="space-y-2">
-                  <span className="block text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-                    Device type
-                  </span>
-                  <Select
-                    value={selectedDeviceTypeFilter}
-                    onValueChange={(value) => {
-                      setSelectedDeviceTypeFilter(value);
-                    }}
-                  >
-                    <SelectTrigger
-                      className="h-11 w-full rounded-xl border-border/80 bg-background px-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]"
-                      aria-label="Filter by device type"
-                    >
-                      <SelectValue placeholder="All device types" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={allFilterValue}>All device types</SelectItem>
-                      {deviceTypeOptions.map((option) => (
-                        <SelectItem key={option} value={option}>
-                          {option}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </label>
-              </div>
-
-              <div className="flex items-center justify-end gap-4 pt-1">
-                <Button
-                  variant="outline"
-                  className="h-11 rounded-xl border-border/80 bg-background px-4"
-                  onClick={() => {
-                    setSearchInput("");
-                    setSelectedLifecycleFilter(allFilterValue);
-                    setSelectedDeviceTypeFilter(allFilterValue);
-                    setSelectedInstallationDueFilter(allFilterValue);
-                  }}
-                >
-                  Reset
-                </Button>
-              </div>
-            </div>
-          </div>
+          <DashboardControls
+            filters={{
+              search,
+              lifecycle,
+              deviceType,
+              installationDue,
+            }}
+            deviceTypeOptions={deviceTypeOptions}
+            kpis={kpisQuery.data}
+            kpisLoading={kpisQuery.isLoading}
+            kpisError={Boolean(kpisQuery.error)}
+            onFiltersChange={updateFilters}
+          />
 
           {devicesQuery.isLoading ? (
             <div className="px-5 py-16 text-sm text-muted-foreground">Loading device fleet...</div>
