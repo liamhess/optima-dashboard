@@ -22,15 +22,15 @@ export function DataTable<TData>(props: DataTableProps<TData>): React.JSX.Elemen
   });
 
   return (
-    <div className="overflow-hidden rounded-[1.5rem] border border-border bg-background">
+    <div className="overflow-hidden bg-background">
       <Table>
-        <TableHeader className="bg-secondary/70">
+        <TableHeader className="bg-secondary/80">
           {table.getHeaderGroups().map((headerGroup) => (
             <TableRow key={headerGroup.id} className="border-border">
               {headerGroup.headers.map((header) => (
                 <TableHead
                   key={header.id}
-                  className="h-12 px-4 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground"
+                  className="h-11 px-4 text-[0.68rem] font-semibold uppercase tracking-[0.22em] text-muted-foreground"
                 >
                   {header.isPlaceholder
                     ? null
@@ -46,10 +46,10 @@ export function DataTable<TData>(props: DataTableProps<TData>): React.JSX.Elemen
             table.getRowModel().rows.map((row) => (
               <TableRow
                 key={row.id}
-                className="border-border/80 transition-colors hover:bg-secondary/45"
+                className="border-border/80 transition-colors hover:bg-secondary/35"
               >
                 {row.getVisibleCells().map((cell) => (
-                  <TableCell key={cell.id} className="px-4 py-4 align-middle">
+                  <TableCell key={cell.id} className="px-4 py-3.5 align-middle">
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </TableCell>
                 ))}

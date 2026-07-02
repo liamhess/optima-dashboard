@@ -28,8 +28,9 @@
     margin: 0;
     @apply bg-background text-foreground;
     background:
-      radial-gradient(circle at top left, rgb(22 166 55 / 0.12), transparent 24%),
-      linear-gradient(180deg, #ffffff 0%, #ffffff 100%);
+      radial-gradient(circle at top left, rgb(22 166 55 / 0.08), transparent 18%),
+      radial-gradient(circle at top right, rgb(22 166 55 / 0.05), transparent 22%),
+      linear-gradient(180deg, #ffffff 0%, #f8f8f1 100%);
   }
 
   button,
