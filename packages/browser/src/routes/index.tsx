@@ -4,6 +4,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { DataTable } from "@/components/data-table.tsx";
+import { toDeviceTableRows, type DeviceTableRow } from "@/devices.ts";
 import {
   Card,
   CardContent,
@@ -14,49 +15,18 @@ import {
 import { rootRoute } from "./__root.tsx";
 import { apiBaseUrl, trpc } from "../trpc.ts";
 
-type TablePreviewRow = {
-  customer: string;
-  location: string;
-  deviceType: string;
-  lifecycle: string;
-  identifier: string;
-  installationDate: string;
-  onlineStatus: string;
-};
-
 type StatusCardProps = {
   label: string;
   value: string;
 };
 
-const tablePreviewRows: TablePreviewRow[] = [
+const deviceColumns: ColumnDef<DeviceTableRow>[] = [
   {
-    customer: "Fam. Muster",
-    location: "Tirol",
-    deviceType: "GW5",
-    lifecycle: "Verschickt",
-    identifier: "GW5-002931 / A4:CF:12:AB:CD:EF",
-    installationDate: "08 Jul 2026",
-    onlineStatus: "Waiting for install",
-  },
-  {
-    customer: "M. Berger",
-    location: "Wien",
-    deviceType: "Zero",
-    lifecycle: "Online",
-    identifier: "ZERO-009102 / 80:6D:97:33:4A:AA",
-    installationDate: "01 Jul 2026",
-    onlineStatus: "Online now",
-  },
-];
-
-const tablePreviewColumns: ColumnDef<TablePreviewRow>[] = [
-  {
-    accessorKey: "customer",
+    accessorKey: "customerName",
     header: "Kunde",
   },
   {
-    accessorKey: "location",
+    accessorKey: "customerState",
     header: "Ort",
   },
   {
@@ -73,30 +43,52 @@ const tablePreviewColumns: ColumnDef<TablePreviewRow>[] = [
     ),
   },
   {
-    accessorKey: "identifier",
+    id: "identifier",
     header: "Serial / MAC",
     cell: ({ row }) => (
-      <span className="font-mono text-xs text-foreground">{row.original.identifier}</span>
+      <div className="space-y-1">
+        <p className="font-mono text-xs text-foreground">
+          {row.original.serialNumber ?? "No serial"}
+        </p>
+        <p className="font-mono text-xs text-muted-foreground">
+          {row.original.macAddress ?? "No MAC"}
+        </p>
+      </div>
     ),
   },
   {
-    accessorKey: "installationDate",
+    accessorKey: "installationDateLabel",
     header: "Installation",
   },
   {
-    accessorKey: "onlineStatus",
+    accessorKey: "onlineLabel",
     header: "Online",
     cell: ({ row }) => (
-      <span className="font-medium text-foreground">{row.original.onlineStatus}</span>
+      <div className="flex items-center gap-2">
+        <span
+          className={onlineIndicatorClassNameByTone[row.original.onlineTone]}
+          aria-hidden="true"
+        />
+        <span className="font-medium text-foreground">{row.original.onlineLabel}</span>
+      </div>
     ),
   },
 ];
 
+const onlineIndicatorClassNameByTone: Record<DeviceTableRow["onlineTone"], string> = {
+  neutral: "size-2.5 rounded-full bg-muted-foreground/35",
+  positive: "size-2.5 rounded-full bg-primary",
+  warning: "size-2.5 rounded-full bg-amber-500",
+  danger: "size-2.5 rounded-full bg-red-500",
+};
+
 function IndexPage(): React.JSX.Element {
   const healthQuery = useQuery(trpc.health.queryOptions());
   const configQuery = useQuery(trpc.config.queryOptions());
-  const isLoading = healthQuery.isLoading || configQuery.isLoading;
-  const error = healthQuery.error ?? configQuery.error;
+  const devicesQuery = useQuery(trpc.devices.list.queryOptions());
+  const backendStatusIsLoading = healthQuery.isLoading || configQuery.isLoading;
+  const backendStatusError = healthQuery.error ?? configQuery.error;
+  const deviceRows = devicesQuery.data ? toDeviceTableRows(devicesQuery.data) : [];
 
   return (
     <main className="min-h-screen px-4 py-10 sm:px-6">
@@ -108,18 +100,22 @@ function IndexPage(): React.JSX.Element {
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl">
               <h1 className="max-w-[12ch] text-4xl font-semibold tracking-[-0.06em] text-foreground sm:text-6xl">
-                Query is live. The table shell is ready.
+                Real device data is flowing through now.
               </h1>
               <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground">
-                We now have the proper server-state layer in place and a reusable table component
-                built on shadcn plus TanStack Table. The next step is swapping the preview rows for
-                real device data and wiring filters into the backend query.
+                The table is now backed by the actual merged device read model from our backend.
+                Next we can add search and structured filters on top without reworking the
+                foundation.
               </p>
             </div>
 
             <Button
               onClick={() => {
-                void Promise.all([healthQuery.refetch(), configQuery.refetch()]);
+                void Promise.all([
+                  healthQuery.refetch(),
+                  configQuery.refetch(),
+                  devicesQuery.refetch(),
+                ]);
               }}
               className="rounded-full px-5"
             >
@@ -142,7 +138,7 @@ function IndexPage(): React.JSX.Element {
             </Badge>
           </CardHeader>
 
-          {isLoading ? (
+          {backendStatusIsLoading ? (
             <CardContent className="pt-0">
               <p className="rounded-2xl border border-dashed border-border bg-background/80 px-4 py-6 text-sm text-muted-foreground">
                 Checking <code className="font-mono text-foreground">trpc.health</code> and{" "}
@@ -151,18 +147,18 @@ function IndexPage(): React.JSX.Element {
             </CardContent>
           ) : null}
 
-          {!isLoading && error ? (
+          {!backendStatusIsLoading && backendStatusError ? (
             <CardContent className="pt-0">
               <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-4 text-sm text-red-700">
                 <p className="font-medium">Connection failed.</p>
                 <code className="mt-2 block overflow-x-auto rounded-xl bg-white/80 p-3 font-mono text-xs text-red-700">
-                  {error.message}
+                  {backendStatusError.message}
                 </code>
               </div>
             </CardContent>
           ) : null}
 
-          {!isLoading && healthQuery.data && configQuery.data ? (
+          {!backendStatusIsLoading && healthQuery.data && configQuery.data ? (
             <CardContent className="grid gap-3 pt-0 sm:grid-cols-2 xl:grid-cols-3">
               <StatusCard label="API base URL" value={apiBaseUrl} />
               <StatusCard label="tRPC endpoint" value={`${apiBaseUrl}/trpc`} />
@@ -183,17 +179,38 @@ function IndexPage(): React.JSX.Element {
         <Card className="rounded-[1.5rem] border-border bg-card shadow-none">
           <CardHeader className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div className="space-y-1">
-              <CardTitle className="text-lg">Device table foundation</CardTitle>
+              <CardTitle className="text-lg">Devices</CardTitle>
               <CardDescription>
-                Reusable data-table shell with the target MVP columns already modeled.
+                Live data from <code className="font-mono text-foreground">trpc.devices.list</code>.
               </CardDescription>
             </div>
             <Badge className="rounded-full px-3 py-1 uppercase tracking-[0.18em]">
-              table preview
+              {devicesQuery.data ? `${devicesQuery.data.length} devices` : "live query"}
             </Badge>
           </CardHeader>
           <CardContent className="pt-0">
-            <DataTable columns={tablePreviewColumns} data={tablePreviewRows} />
+            {devicesQuery.isLoading ? (
+              <div className="rounded-[1.5rem] border border-dashed border-border bg-secondary/40 px-4 py-10 text-sm text-muted-foreground">
+                Loading device fleet...
+              </div>
+            ) : null}
+
+            {!devicesQuery.isLoading && devicesQuery.error ? (
+              <div className="rounded-[1.5rem] border border-red-200 bg-red-50 px-4 py-6 text-sm text-red-700">
+                <p className="font-medium">Could not load devices.</p>
+                <code className="mt-2 block overflow-x-auto rounded-xl bg-white/80 p-3 font-mono text-xs text-red-700">
+                  {devicesQuery.error.message}
+                </code>
+              </div>
+            ) : null}
+
+            {!devicesQuery.isLoading && !devicesQuery.error ? (
+              <DataTable
+                columns={deviceColumns}
+                data={deviceRows}
+                emptyMessage="No devices found."
+              />
+            ) : null}
           </CardContent>
         </Card>
       </section>
