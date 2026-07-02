@@ -1,4 +1,5 @@
-import { useEffect, type JSX } from "react";
+import { useEffect, useState, type JSX } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { AlertCircleIcon, ArrowUpRightIcon, WifiIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge.tsx";
@@ -40,6 +41,7 @@ import {
   type DeviceTableRow,
 } from "@/devices.ts";
 import { lifecycleOptions } from "@/lifecycles.ts";
+import { trpc } from "@/trpc.ts";
 
 const editableFieldLabels: Record<DeviceConflictField, string> = {
   lifecycle: "Lifecycle",
@@ -206,6 +208,8 @@ function ErrorState(props: { error: { message: string }; onRetry: () => void }):
 function DeviceDetailContent(props: { device: DeviceListItem }): JSX.Element {
   const { device } = props;
   const onlineStatus = getDeviceOnlineStatus(device);
+  const queryClient = useQueryClient();
+  const [saveError, setSaveError] = useState<string | null>(null);
   const conflictFields = (Object.entries(device.conflicts) as Array<[string, boolean]>)
     .filter(([key, value]) => key !== "hasAny" && value)
     .map(([key]) => key as DeviceConflictField);
@@ -213,13 +217,40 @@ function DeviceDetailContent(props: { device: DeviceListItem }): JSX.Element {
   const form = useForm<DeviceDetailFormValues>({
     defaultValues: toFormValues(device),
   });
+  const saveLocalChangesMutation = useMutation(
+    trpc.devices.updateLocalChanges.mutationOptions({
+      onSuccess: async (savedDevice): Promise<void> => {
+        setSaveError(null);
+        form.reset(toFormValues(savedDevice));
+        queryClient.setQueryData(trpc.devices.byId.queryKey({ id: device.id }), savedDevice);
+
+        await Promise.all([
+          queryClient.invalidateQueries(trpc.devices.byId.queryFilter({ id: device.id })),
+          queryClient.invalidateQueries(trpc.devices.list.pathFilter()),
+          queryClient.invalidateQueries(trpc.devices.kpis.pathFilter()),
+        ]);
+      },
+      onError: (error): void => {
+        setSaveError(error.message);
+      },
+    }),
+  );
 
   useEffect(() => {
     form.reset(toFormValues(device));
+    setSaveError(null);
   }, [device, form]);
 
-  function onSubmit(_values: DeviceDetailFormValues): void {
-    return;
+  async function onSubmit(values: DeviceDetailFormValues): Promise<void> {
+    setSaveError(null);
+
+    await saveLocalChangesMutation.mutateAsync({
+      id: device.id,
+      lifecycle: values.lifecycle,
+      serialNumber: values.serialNumber,
+      macAddress: values.macAddress,
+      notes: values.notes,
+    });
   }
 
   const timelineItems = [
@@ -388,8 +419,9 @@ function DeviceDetailContent(props: { device: DeviceListItem }): JSX.Element {
                 type="button"
                 variant="outline"
                 className="h-9 rounded-md border-border/80 bg-background px-3"
-                disabled={!form.formState.isDirty}
+                disabled={!form.formState.isDirty || saveLocalChangesMutation.isPending}
                 onClick={() => {
+                  setSaveError(null);
                   form.reset(toFormValues(device));
                 }}
               >
@@ -398,11 +430,17 @@ function DeviceDetailContent(props: { device: DeviceListItem }): JSX.Element {
               <Button
                 type="submit"
                 className="h-9 rounded-md px-4"
-                disabled={!form.formState.isDirty}
+                disabled={!form.formState.isDirty || saveLocalChangesMutation.isPending}
               >
-                Änderungen speichern
+                {saveLocalChangesMutation.isPending ? "Speichert..." : "Änderungen speichern"}
               </Button>
             </div>
+
+            {saveError ? (
+              <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                Änderungen konnten nicht gespeichert werden. {saveError}
+              </div>
+            ) : null}
 
             {device.conflicts.hasAny ? (
               <div className="space-y-2">

@@ -7,6 +7,7 @@ import {
   type DeviceBaseFilters,
 } from "../devices/filters.js";
 import { mergeDevice } from "../devices/merge.js";
+import type { EditableDeviceValues } from "../devices/types.js";
 import { publicProcedure, router } from "../trpc.js";
 
 const deviceBaseFiltersSchema = z.object({
@@ -21,6 +22,13 @@ const deviceListFiltersSchema = deviceBaseFiltersSchema
   .optional();
 
 const deviceBaseFiltersInputSchema = deviceBaseFiltersSchema.optional();
+const updateLocalChangesInputSchema = z.object({
+  id: z.string().min(1),
+  lifecycle: z.string().trim().min(1),
+  serialNumber: z.string(),
+  macAddress: z.string(),
+  notes: z.string(),
+});
 
 function toDeviceBaseFilters(
   input: { search?: string; deviceType?: string } | undefined,
@@ -29,6 +37,38 @@ function toDeviceBaseFilters(
     search: input?.search ?? "",
     deviceType: input?.deviceType ?? "",
   };
+}
+
+function normalizeOptionalEditableValue(value: string): string | null {
+  return value.trim() ? value : null;
+}
+
+function toEditableDeviceValues(
+  input: z.infer<typeof updateLocalChangesInputSchema>,
+): EditableDeviceValues {
+  return {
+    lifecycle: input.lifecycle,
+    serialNumber: normalizeOptionalEditableValue(input.serialNumber),
+    macAddress: normalizeOptionalEditableValue(input.macAddress),
+    notes: normalizeOptionalEditableValue(input.notes),
+  };
+}
+
+function hasEffectiveLocalChanges(
+  device: {
+    lifecycle: string;
+    serialNumber: string | null;
+    macAddress: string | null;
+    notes: string | null;
+  },
+  values: EditableDeviceValues,
+): boolean {
+  return (
+    values.lifecycle !== device.lifecycle ||
+    values.serialNumber !== device.serialNumber ||
+    values.macAddress !== device.macAddress ||
+    values.notes !== device.notes
+  );
 }
 
 export const appRouter = router({
@@ -104,6 +144,56 @@ export const appRouter = router({
         })
         .then((device) => mergeDevice(device, device.overlay));
     }),
+    updateLocalChanges: publicProcedure
+      .input(updateLocalChangesInputSchema)
+      .mutation(async ({ input }) => {
+        const device = await prisma.device.findUniqueOrThrow({
+          where: {
+            id: input.id,
+          },
+        });
+
+        const values = toEditableDeviceValues(input);
+
+        if (!hasEffectiveLocalChanges(device, values)) {
+          await prisma.deviceOverlay.deleteMany({
+            where: {
+              deviceId: device.id,
+            },
+          });
+
+          return mergeDevice(device, null);
+        }
+
+        const localChanges = await prisma.deviceOverlay.upsert({
+          where: {
+            deviceId: device.id,
+          },
+          create: {
+            deviceId: device.id,
+            lifecycle: values.lifecycle,
+            serialNumber: values.serialNumber,
+            macAddress: values.macAddress,
+            notes: values.notes,
+            baseLifecycle: device.lifecycle,
+            baseSerialNumber: device.serialNumber,
+            baseMacAddress: device.macAddress,
+            baseNotes: device.notes,
+          },
+          update: {
+            lifecycle: values.lifecycle,
+            serialNumber: values.serialNumber,
+            macAddress: values.macAddress,
+            notes: values.notes,
+            baseLifecycle: device.lifecycle,
+            baseSerialNumber: device.serialNumber,
+            baseMacAddress: device.macAddress,
+            baseNotes: device.notes,
+          },
+        });
+
+        return mergeDevice(device, localChanges);
+      }),
   }),
 });
 
