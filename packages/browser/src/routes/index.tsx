@@ -786,19 +786,6 @@ function IndexPage(): JSX.Element {
               Optima Geräteflotte
             </h1>
           </div>
-
-          <Button
-            onClick={() => {
-              void Promise.all([
-                devicesQuery.refetch(),
-                kpisQuery.refetch(),
-                deviceTypesQuery.refetch(),
-              ]);
-            }}
-            className="rounded-full px-5"
-          >
-            Aktualisieren
-          </Button>
         </div>
       </header>
 
