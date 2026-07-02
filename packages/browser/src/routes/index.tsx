@@ -1,10 +1,24 @@
+import { createRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { apiBaseUrl, trpc } from "./trpc.ts";
+import { rootRoute } from "./__root.tsx";
+import { apiBaseUrl, trpc } from "../trpc.ts";
 
 type HealthResponse = Awaited<ReturnType<typeof trpc.health.query>>;
 type ConfigResponse = Awaited<ReturnType<typeof trpc.config.query>>;
 
-function App() {
+async function loadBackendState(): Promise<{
+  config: ConfigResponse;
+  health: HealthResponse;
+}> {
+  const [health, config] = await Promise.all([trpc.health.query(), trpc.config.query()]);
+
+  return {
+    config,
+    health,
+  };
+}
+
+function IndexPage() {
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [config, setConfig] = useState<ConfigResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -15,13 +29,9 @@ function App() {
     setError(null);
 
     try {
-      const [healthPayload, configPayload] = await Promise.all([
-        trpc.health.query(),
-        trpc.config.query(),
-      ]);
-
-      setHealth(healthPayload);
-      setConfig(configPayload);
+      const payload = await loadBackendState();
+      setHealth(payload.health);
+      setConfig(payload.config);
     } catch (caughtError) {
       setHealth(null);
       setConfig(null);
@@ -45,11 +55,11 @@ function App() {
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl">
               <h1 className="max-w-[12ch] text-4xl font-semibold tracking-[-0.06em] text-ink sm:text-6xl">
-                Tailwind foundation is in place.
+                Router foundation is in place.
               </h1>
               <p className="mt-4 max-w-2xl text-base leading-7 text-ink-muted">
-                This is still the backend smoke-check screen, but it now runs on Tailwind and uses
-                the green brand direction we want for buttons, accents, and later shadcn components.
+                This page now lives on the index route, which gives us a clean base for shadcn
+                components and the upcoming device table flow.
               </p>
             </div>
 
@@ -70,7 +80,7 @@ function App() {
               <p className="text-sm text-ink-muted">Current browser-to-backend smoke test.</p>
             </div>
             <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-primary">
-              Tailwind live
+              Router live
             </span>
           </div>
 
@@ -140,4 +150,8 @@ function App() {
   );
 }
 
-export default App;
+export const indexRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/",
+  component: IndexPage,
+});
