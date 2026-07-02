@@ -1,171 +1,48 @@
-:root {
-  font-family:
-    Inter,
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-  color: #1f2937;
-  background:
-    radial-gradient(circle at top, rgba(14, 165, 233, 0.12), transparent 32%),
-    linear-gradient(180deg, #f7fbff 0%, #eef4f8 100%);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #16a637;
+  --color-primary-foreground: #f5fff7;
+  --color-surface: #f6faf6;
+  --color-surface-strong: #ffffff;
+  --color-ink: #122118;
+  --color-ink-muted: #5b6c61;
+  --color-line: #d8e6d9;
+  --color-success-soft: #e8f7ec;
+  --color-danger-soft: #fff0f0;
 }
 
-* {
-  box-sizing: border-box;
-}
+@layer base {
+  :root {
+    color: var(--color-ink);
+    background:
+      radial-gradient(circle at top left, rgb(22 166 55 / 0.18), transparent 28%),
+      linear-gradient(180deg, #fcfffc 0%, var(--color-surface) 100%);
+    font-family: "Avenir Next", "Segoe UI", sans-serif;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 
-html,
-body,
-#root {
-  min-height: 100%;
-}
+  * {
+    box-sizing: border-box;
+  }
 
-body {
-  margin: 0;
-}
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
 
-button,
-input,
-select,
-textarea {
-  font: inherit;
-}
+  body {
+    margin: 0;
+  }
 
-button {
-  cursor: pointer;
-}
-
-.app-shell {
-  min-height: 100vh;
-  padding: 48px 20px;
-}
-
-.hero-panel {
-  max-width: 820px;
-  margin: 0 auto;
-  padding: 40px;
-  border: 1px solid rgba(148, 163, 184, 0.24);
-  border-radius: 28px;
-  background: rgba(255, 255, 255, 0.86);
-  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.08);
-  backdrop-filter: blur(12px);
-}
-
-.eyebrow {
-  margin: 0 0 12px;
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: #0369a1;
-}
-
-h1 {
-  margin: 0 0 16px;
-  font-size: clamp(2.5rem, 6vw, 4.5rem);
-  line-height: 0.95;
-  letter-spacing: -0.05em;
-  color: #0f172a;
-}
-
-.intro {
-  max-width: 60ch;
-  margin: 0;
-  font-size: 1.05rem;
-  color: #475569;
-}
-
-.status-card {
-  margin-top: 32px;
-  padding: 24px;
-  border-radius: 22px;
-  background: linear-gradient(180deg, rgba(248, 250, 252, 0.95), #ffffff);
-  border: 1px solid rgba(148, 163, 184, 0.2);
-}
-
-.status-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 16px;
-}
-
-.status-header h2 {
-  margin: 0;
-  font-size: 1.1rem;
-  color: #0f172a;
-}
-
-.status-header button {
-  border: 0;
-  border-radius: 999px;
-  padding: 10px 14px;
-  background: #0f766e;
-  color: white;
-  font-weight: 700;
-}
-
-.status-loading,
-.status-success p,
-.status-error p {
-  margin: 0;
-}
-
-.status-success,
-.status-error {
-  display: grid;
-  gap: 14px;
-}
-
-.status-success p {
-  color: #166534;
-}
-
-.status-error p {
-  color: #b91c1c;
-}
-
-.status-error code {
-  display: block;
-  padding: 12px 14px;
-  border-radius: 14px;
-  background: #fff1f2;
-  color: #9f1239;
-  overflow: auto;
-}
-
-.status-grid {
-  display: grid;
-  gap: 12px;
-  margin: 0;
-}
-
-.status-grid div {
-  padding: 14px 16px;
-  border-radius: 16px;
-  background: #f8fafc;
-}
-
-.status-grid dt {
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #64748b;
-}
-
-.status-grid dd {
-  margin: 6px 0 0;
-  color: #0f172a;
-  font-weight: 600;
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
 }
